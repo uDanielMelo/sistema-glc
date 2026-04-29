@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
+from app.api.v1.endpoints.auth import router as auth_router
 
 app = FastAPI(
     title="GLC — Gestão e Logística de Certames",
@@ -23,7 +24,4 @@ def health():
     return {"status": "ok", "version": "0.1.0"}
 
 
-# Rotas serão registradas aqui conforme os módulos forem desenvolvidos
-# from app.api.v1.endpoints import auth, certames, locais, fiscais, ocorrencias
-# app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
-# app.include_router(certames.router, prefix="/api/v1/certames", tags=["certames"])
+app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
