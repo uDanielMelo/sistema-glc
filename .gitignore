@@ -3,42 +3,33 @@ __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
-.Python
-venv/
-.venv/
-env/
-*.egg-info/
-dist/
-build/
+.env
+backend/venv/
 .pytest_cache/
 .mypy_cache/
-.ruff_cache/
-htmlcov/
-.coverage
-
-# Env
-.env
-.env.local
-.env.*.local
 
 # Node
 node_modules/
 dist/
-.next/
-out/
-.cache/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-.DS_Store
-Thumbs.db
+dist-ssr
+*.local
 
 # Logs
+logs
 *.log
-logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# Uploads temporários
-backend/uploads/
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
