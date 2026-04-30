@@ -14,9 +14,23 @@ export default function DivisaoPeriodos() {
   const [numPeriodos, setNumPeriodos] = useState(2)
   const [loading, setLoading] = useState(false)
   const [activeCargo, setActiveCargo] = useState<Cargo | null>(null)
+  const [novoCargoNome, setNovoCargoNome] = useState('')
+  const [salvandoCargo, setSalvandoCargo] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+
+  const adicionarCargoManual = async () => {
+    if (!novoCargoNome.trim() || !certameSelecionado) return
+    setSalvandoCargo(true)
+    try {
+      const cargo = await periodosService.criarCargoManual(certameSelecionado, novoCargoNome.trim())
+      setCargos(prev => [...prev, cargo])
+      setNovoCargoNome('')
+    } finally {
+      setSalvandoCargo(false)
+    }
+  }
 
   useEffect(() => {
     certamesService.listar().then(setCertames)
@@ -143,26 +157,51 @@ export default function DivisaoPeriodos() {
         )}
 
         {certameSelecionado && periodos.length > 0 && (
-          <>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Importar planilha de cargos</label>
-              <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={importarXlsx} className="hidden" />
-              <button
-                onClick={() => fileRef.current?.click()}
-                disabled={loading}
-                className="border border-gray-300 rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-              >
-                {loading ? 'Importando...' : 'Selecionar arquivo'}
-              </button>
-            </div>
-          </>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Importar planilha de cargos</label>
+            <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={importarXlsx} className="hidden" />
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={loading}
+              className="border border-gray-300 rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+            >
+              {loading ? 'Importando...' : 'Selecionar arquivo'}
+            </button>
+          </div>
         )}
       </div>
 
       {periodos.length > 0 && (
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div className="flex gap-4 overflow-x-auto pb-4">
-            <ColunaCargos id="espera" titulo="Aguardando" cargos={cargosEspera} />
+            <div className="flex-shrink-0 w-64">
+              <div className="rounded-xl border border-gray-200 bg-gray-50">
+                <div className="px-4 py-3 border-b border-gray-200">
+                  <div className="text-sm font-medium text-gray-900">Aguardando</div>
+                  <div className="text-xs text-gray-400">{cargosEspera.length} cargo{cargosEspera.length !== 1 ? 's' : ''}</div>
+                </div>
+                <div className="p-2">
+                  <div className="flex gap-1.5 mb-2">
+                    <input
+                      type="text"
+                      value={novoCargoNome}
+                      onChange={e => setNovoCargoNome(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && adicionarCargoManual()}
+                      placeholder="Nome do cargo..."
+                      className="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <button
+                      onClick={adicionarCargoManual}
+                      disabled={salvandoCargo || !novoCargoNome.trim()}
+                      className="bg-indigo-600 text-white px-2.5 py-1.5 rounded-lg text-xs font-medium hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <DroppableArea id="espera" cargos={cargosEspera} />
+                </div>
+              </div>
+            </div>
             {periodos.map(p => (
               <ColunaCargos
                 key={p.id}
@@ -178,6 +217,18 @@ export default function DivisaoPeriodos() {
           </DragOverlay>
         </DndContext>
       )}
+    </div>
+  )
+}
+
+function DroppableArea({ id, cargos }: { id: string; cargos: Cargo[] }) {
+  const { setNodeRef, isOver } = useDroppable({ id })
+  return (
+    <div
+      ref={setNodeRef}
+      className={`min-h-32 space-y-1.5 rounded-lg transition-colors ${isOver ? 'bg-indigo-50' : ''}`}
+    >
+      {cargos.map(c => <CargoCard key={c.id} cargo={c} />)}
     </div>
   )
 }
@@ -314,16 +365,13 @@ function gerarHTML(certame: Certame | undefined, periodos: Periodo[], cargos: Ca
     </div>
     <div class="header-right">Gerado em ${data}</div>
   </div>
-
   <div class="resumo">
     <table>
       <thead><tr><th>Período</th><th class="num">Inscritos</th><th class="num">Deferidos</th></tr></thead>
       <tbody>${resumo}</tbody>
     </table>
   </div>
-
   <div class="periodos">${blocos}</div>
-
   <div class="footer">
     <span>GLC — Gestão e Logística de Certames</span>
     <span>${data}</span>

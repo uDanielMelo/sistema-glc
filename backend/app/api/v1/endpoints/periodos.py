@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, UploadFile, File
 from sqlalchemy.orm import Session
 from app.db.session import get_db
+from app.api.v1.services.periodos import (
+    listar_periodos, criar_periodo, atualizar_periodo, deletar_periodo,
+    listar_cargos, atualizar_cargo, importar_cargos_xlsx, criar_cargo_manual
+)
 from app.api.v1.schemas.periodos import (
     PeriodoCreate, PeriodoUpdate, PeriodoResponse,
     CargoResponse, CargoUpdate
-)
-from app.api.v1.services.periodos import (
-    listar_periodos, criar_periodo, atualizar_periodo, deletar_periodo,
-    listar_cargos, atualizar_cargo, importar_cargos_xlsx
 )
 from app.core.deps import require_logistica
 from app.models.models import Usuario
@@ -80,3 +80,17 @@ def importar_cargos(
 ):
     conteudo = file.file.read()
     return importar_cargos_xlsx(db, certame_id, conteudo)
+
+from pydantic import BaseModel
+
+class CargoManualCreate(BaseModel):
+    certame_id: str
+    nome: str
+
+@router.post("/cargos", response_model=CargoResponse, status_code=201)
+def post_cargo_manual(
+    data: CargoManualCreate,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_logistica),
+):
+    return criar_cargo_manual(db, data.certame_id, data.nome)

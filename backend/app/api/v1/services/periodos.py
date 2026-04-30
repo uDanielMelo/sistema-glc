@@ -106,6 +106,10 @@ def importar_cargos_xlsx(db: Session, certame_id: str, conteudo: bytes) -> list[
         "TOTAL CONFIRMADOS", cols.get("DEFERIDOS", cols.get("CONFIRMADOS", col_total))
     )
 
+    # Preserva período dos cargos existentes pelo nome
+    existentes = db.query(Cargo).filter(Cargo.certame_id == certame_id).all()
+    periodo_por_nome = {_norm(c.nome): c.periodo_id for c in existentes}
+
     db.query(Cargo).filter(Cargo.certame_id == certame_id).delete()
     db.commit()
 
@@ -120,11 +124,15 @@ def importar_cargos_xlsx(db: Session, certame_id: str, conteudo: bytes) -> list[
         total = _int_safe(row.get(col_total, 0)) if col_total else 0
         deferidos = _int_safe(row.get(col_confirmado, 0)) if col_confirmado else 0
 
+        # Restaura período se nome já existia
+        periodo_id = periodo_por_nome.get(_norm(nome))
+
         cargo = Cargo(
             certame_id=certame_id,
             nome=nome,
             total_inscritos=total,
             total_deferidos=deferidos,
+            periodo_id=periodo_id,
         )
         db.add(cargo)
         cargos.append(cargo)
@@ -133,3 +141,13 @@ def importar_cargos_xlsx(db: Session, certame_id: str, conteudo: bytes) -> list[
     for c in cargos:
         db.refresh(c)
     return cargos
+
+def criar_cargo_manual(db: Session, certame_id: str, nome: str) -> Cargo:
+    certame = db.query(Certame).filter(Certame.id == certame_id).first()
+    if not certame:
+        raise HTTPException(status_code=404, detail="Certame não encontrado")
+    cargo = Cargo(certame_id=certame_id, nome=nome, total_inscritos=0, total_deferidos=0)
+    db.add(cargo)
+    db.commit()
+    db.refresh(cargo)
+    return cargo

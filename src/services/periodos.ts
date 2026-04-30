@@ -57,4 +57,9 @@ export const periodosService = {
     })
     return data
   },
+
+  criarCargoManual: async (certame_id: string, nome: string): Promise<Cargo> => {
+    const { data } = await api.post('/cargos', { certame_id, nome })
+    return data
+  },
 }
