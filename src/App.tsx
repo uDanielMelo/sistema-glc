@@ -4,6 +4,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Certames from './pages/Certames'
 import CertameDetalhe from './pages/CertameDetalhe'
+import DivisaoPeriodos from './pages/DivisaoPeriodos'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token)
@@ -26,6 +27,7 @@ export default function App() {
           <Route index element={<div />} />
           <Route path="certames" element={<Certames />} />
           <Route path="certames/:id" element={<CertameDetalhe />} />
+          <Route path="divisao-periodos" element={<DivisaoPeriodos />} />
         </Route>
       </Routes>
     </BrowserRouter>

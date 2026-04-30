@@ -14,6 +14,7 @@ export default function Dashboard({ children }: { children?: React.ReactNode }) 
   const navItems = [
     { label: 'Dashboard', path: '/' },
     { label: 'Certames', path: '/certames' },
+    { label: 'Divisão de Períodos', path: '/divisao-periodos' },
   ]
 
   return (
