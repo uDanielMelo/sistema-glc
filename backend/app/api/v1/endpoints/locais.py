@@ -3,12 +3,13 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from app.db.session import get_db
 from app.api.v1.schemas.locais import (
-    LocalCreate, LocalUpdate, LocalResponse, SalaCreate, SalaResponse
+    LocalCreate, LocalUpdate, LocalResponse,
+    SalaCreate, SalaUpdate, SalasBulkCreate, SalaResponse
 )
 from app.api.v1.services.locais import (
-    listar_locais, buscar_local, criar_local,
-    atualizar_local, deletar_local, criar_sala,
-    deletar_sala, importar_locais_xlsx
+    listar_locais, buscar_local, criar_local, atualizar_local, deletar_local,
+    criar_sala, atualizar_sala, deletar_sala, criar_salas_lote,
+    importar_salas, importar_locais_xlsx
 )
 from app.core.deps import require_logistica
 from app.models.models import Usuario
@@ -74,6 +75,37 @@ def post_sala(
 ):
     data.local_id = local_id
     return criar_sala(db, data)
+
+
+@router.post("/locais/{local_id}/salas/bulk", response_model=list[SalaResponse], status_code=201)
+def post_salas_bulk(
+    local_id: str,
+    data: SalasBulkCreate,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_logistica),
+):
+    return criar_salas_lote(db, local_id, data)
+
+
+@router.post("/locais/{local_id}/salas/importar", response_model=list[SalaResponse])
+def post_importar_salas(
+    local_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_logistica),
+):
+    conteudo = file.file.read()
+    return importar_salas(db, local_id, conteudo, file.filename or "")
+
+
+@router.put("/salas/{sala_id}", response_model=SalaResponse)
+def put_sala(
+    sala_id: str,
+    data: SalaUpdate,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_logistica),
+):
+    return atualizar_sala(db, sala_id, data)
 
 
 @router.delete("/salas/{sala_id}", status_code=204)

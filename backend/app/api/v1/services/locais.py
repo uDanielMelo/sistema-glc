@@ -1,7 +1,16 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from app.models.models import Local, Sala
-from app.api.v1.schemas.locais import LocalCreate, LocalUpdate, SalaCreate
+from app.api.v1.schemas.locais import LocalCreate, LocalUpdate, SalaCreate, SalaUpdate, SalasBulkCreate
+
+
+def _recalc_local(db: Session, local_id: str) -> None:
+    salas = db.query(Sala).filter(Sala.local_id == local_id).all()
+    local = db.query(Local).filter(Local.id == local_id).first()
+    if local:
+        local.total_salas = len(salas)
+        local.capacidade_total = sum(s.capacidade for s in salas)
+        db.commit()
 
 
 def listar_locais(
@@ -57,14 +66,19 @@ def criar_sala(db: Session, data: SalaCreate) -> Sala:
     sala = Sala(**data.model_dump())
     db.add(sala)
     db.commit()
-    # Atualiza total_salas do local
-    local = db.query(Local).filter(Local.id == data.local_id).first()
-    if local:
-        local.total_salas = db.query(Sala).filter(Sala.local_id == data.local_id).count()
-        local.capacidade_total = sum(
-            s.capacidade for s in db.query(Sala).filter(Sala.local_id == data.local_id).all()
-        )
-        db.commit()
+    _recalc_local(db, data.local_id)
+    db.refresh(sala)
+    return sala
+
+
+def atualizar_sala(db: Session, sala_id: str, data: SalaUpdate) -> Sala:
+    sala = db.query(Sala).filter(Sala.id == sala_id).first()
+    if not sala:
+        raise HTTPException(status_code=404, detail="Sala não encontrada")
+    for field, value in data.model_dump(exclude_none=True).items():
+        setattr(sala, field, value)
+    db.commit()
+    _recalc_local(db, sala.local_id)
     db.refresh(sala)
     return sala
 
@@ -76,20 +90,113 @@ def deletar_sala(db: Session, sala_id: str) -> None:
     local_id = sala.local_id
     db.delete(sala)
     db.commit()
+    _recalc_local(db, local_id)
+
+
+def criar_salas_lote(db: Session, local_id: str, data: SalasBulkCreate) -> list[Sala]:
     local = db.query(Local).filter(Local.id == local_id).first()
-    if local:
-        local.total_salas = db.query(Sala).filter(Sala.local_id == local_id).count()
-        local.capacidade_total = sum(
-            s.capacidade for s in db.query(Sala).filter(Sala.local_id == local_id).all()
+    if not local:
+        raise HTTPException(status_code=404, detail="Local não encontrado")
+    salas = []
+    for i in range(1, data.quantidade + 1):
+        sala = Sala(
+            local_id=local_id,
+            numero=f"{data.prefixo} {str(i).zfill(2)}",
+            capacidade=data.capacidade or 0,
+            bloco=data.bloco,
+            andar=data.andar,
+            acessivel=False,
         )
-        db.commit()
+        db.add(sala)
+        salas.append(sala)
+    db.commit()
+    _recalc_local(db, local_id)
+    for s in salas:
+        db.refresh(s)
+    return salas
+
+
+def importar_salas(db: Session, local_id: str, conteudo: bytes, filename: str = "") -> list[Sala]:
+    import io, pandas as pd, unicodedata, re
+
+    local = db.query(Local).filter(Local.id == local_id).first()
+    if not local:
+        raise HTTPException(status_code=404, detail="Local não encontrado")
+
+    def _norm(texto: str) -> str:
+        s = unicodedata.normalize("NFD", str(texto))
+        s = "".join(c for c in s if unicodedata.category(c) != "Mn")
+        s = re.sub(r"[^\w\s]", " ", s)
+        return s.upper().strip()
+
+    def _safe_str(val) -> str | None:
+        s = str(val).strip()
+        return None if s.lower() in ("nan", "none", "") else s
+
+    def _safe_int(val) -> int:
+        try:
+            return 0 if pd.isna(val) else int(float(val))
+        except Exception:
+            return 0
+
+    if filename.lower().endswith(".csv"):
+        df = None
+        for enc in ("utf-8", "latin-1"):
+            for sep in (",", ";", "\t"):
+                try:
+                    candidate = pd.read_csv(io.BytesIO(conteudo), sep=sep, encoding=enc)
+                    if len(candidate.columns) > 1:
+                        df = candidate
+                        break
+                except Exception:
+                    continue
+            if df is not None:
+                break
+        if df is None:
+            df = pd.read_csv(io.BytesIO(conteudo), encoding="latin-1")
+    else:
+        xl = pd.ExcelFile(io.BytesIO(conteudo))
+        df = pd.read_excel(io.BytesIO(conteudo), sheet_name=xl.sheet_names[0])
+
+    cols = {_norm(c): c for c in df.columns}
+    col_num = cols.get("NUMERO", cols.get("SALA", cols.get("NOME", df.columns[0])))
+    col_cap = cols.get("CAPACIDADE", cols.get("VAGAS", None))
+    col_bloco = cols.get("BLOCO", None)
+    col_andar = cols.get("ANDAR", None)
+    col_acess = cols.get("ACESSIVEL", cols.get("ACESSIBILIDADE", None))
+
+    salas = []
+    for _, row in df.iterrows():
+        numero = _safe_str(row[col_num])
+        if not numero:
+            continue
+
+        acessivel = False
+        if col_acess:
+            val = _safe_str(row.get(col_acess, ""))
+            if val:
+                acessivel = val.upper() in ("SIM", "S", "TRUE", "1", "X")
+
+        sala = Sala(
+            local_id=local_id,
+            numero=numero,
+            capacidade=_safe_int(row.get(col_cap, 0)) if col_cap else 0,
+            bloco=_safe_str(row.get(col_bloco, "")) if col_bloco else None,
+            andar=_safe_str(row.get(col_andar, "")) if col_andar else None,
+            acessivel=acessivel,
+        )
+        db.add(sala)
+        salas.append(sala)
+
+    db.commit()
+    _recalc_local(db, local_id)
+    for s in salas:
+        db.refresh(s)
+    return salas
 
 
 def importar_locais_xlsx(db: Session, conteudo: bytes, certame_id: str | None = None) -> list[Local]:
-    import io
-    import pandas as pd
-    import unicodedata
-    import re
+    import io, pandas as pd, unicodedata, re
 
     def _norm(texto: str) -> str:
         s = unicodedata.normalize("NFD", texto)

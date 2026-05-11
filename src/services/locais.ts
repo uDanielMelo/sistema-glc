@@ -5,6 +5,8 @@ export interface Sala {
   local_id: string
   numero: string
   capacidade: number
+  bloco?: string
+  andar?: string
   acessivel: boolean
   observacoes?: string
 }
@@ -57,8 +59,29 @@ export const locaisService = {
     return data
   },
 
+  criarSalasLote: async (local_id: string, payload: {
+    quantidade: number; prefixo?: string; capacidade?: number; bloco?: string; andar?: string
+  }): Promise<Sala[]> => {
+    const { data } = await api.post(`/locais/${local_id}/salas/bulk`, payload)
+    return data
+  },
+
+  atualizarSala: async (id: string, payload: Partial<Sala>): Promise<Sala> => {
+    const { data } = await api.put(`/salas/${id}`, payload)
+    return data
+  },
+
   deletarSala: async (sala_id: string): Promise<void> => {
     await api.delete(`/salas/${sala_id}`)
+  },
+
+  importarSalas: async (local_id: string, file: File): Promise<Sala[]> => {
+    const form = new FormData()
+    form.append('file', file)
+    const { data } = await api.post(`/locais/${local_id}/salas/importar`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return data
   },
 
   importar: async (file: File, certame_id?: string): Promise<Local[]> => {

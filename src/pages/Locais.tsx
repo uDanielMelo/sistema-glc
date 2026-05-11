@@ -199,7 +199,6 @@ function LocalDetalhe({ local, onVoltar, onAtualizar, onDeletar }: {
   onDeletar: () => void
 }) {
   const [salas, setSalas] = useState<Sala[]>(local.salas || [])
-  const [showSala, setShowSala] = useState(false)
   const [editando, setEditando] = useState(false)
   const [buscandoCep, setBuscandoCep] = useState(false)
   const [form, setForm] = useState({
@@ -229,11 +228,6 @@ function LocalDetalhe({ local, onVoltar, onAtualizar, onDeletar }: {
     const atualizado = await locaisService.atualizar(local.id, form)
     onAtualizar(atualizado)
     setEditando(false)
-  }
-
-  const deletarSala = async (sala_id: string) => {
-    await locaisService.deletarSala(sala_id)
-    setSalas(prev => prev.filter(s => s.id !== sala_id))
   }
 
   return (
@@ -338,40 +332,7 @@ function LocalDetalhe({ local, onVoltar, onAtualizar, onDeletar }: {
         )}
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-medium text-gray-900">Salas</h3>
-          <button onClick={() => setShowSala(true)} className="text-sm text-indigo-600 hover:underline">
-            + Adicionar sala
-          </button>
-        </div>
-
-        {salas.length === 0 ? (
-          <p className="text-gray-400 text-sm">Nenhuma sala cadastrada.</p>
-        ) : (
-          <div className="space-y-1">
-            {salas.map(s => (
-              <div key={s.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-                <div className="text-sm">
-                  <span className="font-medium text-gray-900">Sala {s.numero}</span>
-                  {s.capacidade > 0 && <span className="text-gray-400 ml-2">{s.capacidade} vagas</span>}
-                  {s.acessivel && <span className="ml-2 text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Acessível</span>}
-                  {s.observacoes && <span className="text-gray-400 ml-2 text-xs">{s.observacoes}</span>}
-                </div>
-                <button onClick={() => deletarSala(s.id)} className="text-gray-300 hover:text-red-400 text-xs">Excluir</button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {showSala && (
-        <NovaSalaModal
-          local_id={local.id}
-          onClose={() => setShowSala(false)}
-          onCreated={s => { setSalas(prev => [...prev, s]); setShowSala(false) }}
-        />
-      )}
+      <SalasSection localId={local.id} salas={salas} onChange={setSalas} />
     </div>
   )
 }
@@ -479,55 +440,222 @@ function NovoLocalModal({ onClose, onCreated }: {
   )
 }
 
-function NovaSalaModal({ local_id, onClose, onCreated }: {
-  local_id: string
-  onClose: () => void
-  onCreated: (s: Sala) => void
+function SalasSection({ localId, salas, onChange }: {
+  localId: string
+  salas: Sala[]
+  onChange: (salas: Sala[]) => void
 }) {
-  const [form, setForm] = useState({ numero: '', capacidade: 0, acessivel: false, observacoes: '' })
-  const [loading, setLoading] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [showLote, setShowLote] = useState(false)
+  const [showFormato, setShowFormato] = useState(false)
+  const [editandoId, setEditandoId] = useState<string | null>(null)
+  const [criando, setCriando] = useState(false)
+  const [lote, setLote] = useState({ quantidade: 1, prefixo: 'Sala', capacidade: 0, bloco: '', andar: '' })
 
-  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setLoading(true)
+  const criarEmLote = async () => {
+    setCriando(true)
     try {
-      const sala = await locaisService.criarSala(local_id, form)
-      onCreated(sala)
+      const novas = await locaisService.criarSalasLote(localId, {
+        quantidade: lote.quantidade,
+        prefixo: lote.prefixo,
+        capacidade: lote.capacidade,
+        bloco: lote.bloco || undefined,
+        andar: lote.andar || undefined,
+      })
+      onChange([...salas, ...novas])
+      setShowLote(false)
     } finally {
-      setLoading(false)
+      setCriando(false)
     }
   }
 
+  const importar = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const importadas = await locaisService.importarSalas(localId, file)
+    onChange([...salas, ...importadas])
+    e.target.value = ''
+  }
+
+  const salvar = async (id: string, dados: Partial<Sala>) => {
+    const atualizada = await locaisService.atualizarSala(id, dados)
+    onChange(salas.map(s => s.id === id ? atualizada : s))
+    setEditandoId(null)
+  }
+
+  const deletar = async (id: string) => {
+    await locaisService.deletarSala(id)
+    onChange(salas.filter(s => s.id !== id))
+  }
+
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Nova sala</h3>
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <input required placeholder="Número da sala *"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            value={form.numero} onChange={e => setForm({ ...form, numero: e.target.value })} />
-          <input type="number" placeholder="Capacidade (vagas)"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            value={form.capacidade || ''} onChange={e => setForm({ ...form, capacidade: Number(e.target.value) })} />
-          <div className="flex items-center gap-2">
-            <input type="checkbox" checked={form.acessivel}
-              onChange={e => setForm({ ...form, acessivel: e.target.checked })} className="rounded" />
-            <label className="text-sm text-gray-700">Acessível</label>
+    <div className="bg-white border border-gray-200 rounded-xl p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-medium text-gray-900">
+          Salas <span className="text-gray-400 font-normal text-sm">({salas.length})</span>
+        </h3>
+        <div className="flex gap-2 flex-wrap justify-end">
+          <button onClick={() => setShowFormato(!showFormato)}
+            className="text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded px-2 py-1">
+            ver formato planilha
+          </button>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={importar} className="hidden" />
+          <button onClick={() => fileRef.current?.click()}
+            className="text-sm text-gray-600 border border-gray-300 rounded-lg px-3 py-1.5 hover:bg-gray-50">
+            Importar planilha
+          </button>
+          <button onClick={() => setShowLote(!showLote)}
+            className="text-sm text-indigo-600 border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50">
+            + Criar salas
+          </button>
+        </div>
+      </div>
+
+      {showFormato && (
+        <div className="mb-4 bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs">
+          <p className="font-medium text-gray-700 mb-2">Formato esperado da planilha de salas:</p>
+          <div className="overflow-x-auto">
+            <table className="border-collapse">
+              <thead>
+                <tr className="bg-gray-100 text-gray-600">
+                  {['Número *', 'Capacidade', 'Bloco', 'Andar', 'Acessível'].map(h => (
+                    <th key={h} className="border border-gray-300 px-3 py-1.5 text-left font-medium">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="text-gray-500">
+                <tr>
+                  {['01', '40', 'A', 'Térreo', 'Não'].map((v, i) => (
+                    <td key={i} className="border border-gray-200 px-3 py-1">{v}</td>
+                  ))}
+                </tr>
+                <tr>
+                  {['02', '35', 'B', '1º', 'Sim'].map((v, i) => (
+                    <td key={i} className="border border-gray-200 px-3 py-1">{v}</td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
           </div>
-          <textarea placeholder="Observações" rows={2}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            value={form.observacoes} onChange={e => setForm({ ...form, observacoes: e.target.value })} />
-          <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose}
-              className="flex-1 border border-gray-300 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">
-              Cancelar
+          <p className="mt-2 text-gray-400">* obrigatório · Acessível: Sim/Não ou S/N · Aceita XLSX e CSV · Colunas Bloco, Andar e Acessível são opcionais</p>
+        </div>
+      )}
+
+      {showLote && (
+        <div className="mb-4 bg-indigo-50 border border-indigo-100 rounded-lg p-4">
+          <p className="text-xs font-medium text-indigo-700 mb-3">Criar salas em lote</p>
+          <div className="flex flex-wrap gap-3 items-end">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Quantidade *</label>
+              <input type="number" min={1} max={200} value={lote.quantidade}
+                onChange={e => setLote({ ...lote, quantidade: Number(e.target.value) })}
+                className="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Prefixo</label>
+              <input value={lote.prefixo} onChange={e => setLote({ ...lote, prefixo: e.target.value })}
+                className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Capacidade padrão</label>
+              <input type="number" min={0} value={lote.capacidade || ''}
+                onChange={e => setLote({ ...lote, capacidade: Number(e.target.value) })}
+                className="w-28 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Bloco</label>
+              <input value={lote.bloco} placeholder="A, B..." onChange={e => setLote({ ...lote, bloco: e.target.value })}
+                className="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Andar</label>
+              <input value={lote.andar} placeholder="Térreo..." onChange={e => setLote({ ...lote, andar: e.target.value })}
+                className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <button onClick={criarEmLote} disabled={criando || !lote.quantidade}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
+              {criando ? 'Criando...' : `Criar ${lote.quantidade} sala${lote.quantidade !== 1 ? 's' : ''}`}
             </button>
-            <button type="submit" disabled={loading}
-              className="flex-1 bg-indigo-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
-              {loading ? 'Salvando...' : 'Criar'}
-            </button>
+            <button onClick={() => setShowLote(false)} className="text-sm text-gray-400 hover:text-gray-600">Cancelar</button>
           </div>
-        </form>
+          <p className="text-xs text-gray-400 mt-2">
+            Serão criadas: {lote.prefixo} 01, {lote.prefixo} 02{lote.quantidade > 2 ? `, ... ${lote.prefixo} ${String(lote.quantidade).padStart(2, '0')}` : ''}
+          </p>
+        </div>
+      )}
+
+      {salas.length === 0 ? (
+        <p className="text-gray-400 text-sm">Nenhuma sala cadastrada.</p>
+      ) : (
+        <div>
+          <div className="grid grid-cols-[1fr_80px_60px_90px_70px_90px] gap-2 pb-2 text-xs font-medium text-gray-400 border-b border-gray-100">
+            <span>Nome</span><span>Vagas</span><span>Bloco</span><span>Andar</span><span>Acessível</span><span></span>
+          </div>
+          {salas.map(s => (
+            <SalaRow key={s.id} sala={s}
+              editando={editandoId === s.id}
+              onEdit={() => setEditandoId(s.id)}
+              onSave={d => salvar(s.id, d)}
+              onCancel={() => setEditandoId(null)}
+              onDelete={() => deletar(s.id)} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SalaRow({ sala, editando, onEdit, onSave, onCancel, onDelete }: {
+  sala: Sala
+  editando: boolean
+  onEdit: () => void
+  onSave: (d: Partial<Sala>) => void
+  onCancel: () => void
+  onDelete: () => void
+}) {
+  const [form, setForm] = useState({
+    numero: sala.numero,
+    capacidade: sala.capacidade,
+    bloco: sala.bloco || '',
+    andar: sala.andar || '',
+    acessivel: sala.acessivel,
+  })
+
+  const inp = 'border border-gray-300 rounded px-2 py-1 text-sm w-full focus:outline-none focus:ring-1 focus:ring-indigo-500'
+
+  if (editando) {
+    return (
+      <div className="grid grid-cols-[1fr_80px_60px_90px_70px_90px] gap-2 py-2 items-center border-b border-gray-50">
+        <input value={form.numero} onChange={e => setForm({ ...form, numero: e.target.value })} className={inp} />
+        <input type="number" value={form.capacidade || ''} onChange={e => setForm({ ...form, capacidade: Number(e.target.value) })} className={inp} />
+        <input value={form.bloco} onChange={e => setForm({ ...form, bloco: e.target.value })} className={inp} />
+        <input value={form.andar} onChange={e => setForm({ ...form, andar: e.target.value })} className={inp} />
+        <label className="flex items-center gap-1 text-xs text-gray-600 cursor-pointer">
+          <input type="checkbox" checked={form.acessivel} onChange={e => setForm({ ...form, acessivel: e.target.checked })} />
+          Sim
+        </label>
+        <div className="flex gap-2">
+          <button onClick={() => onSave(form)} className="text-xs text-indigo-600 hover:underline">Salvar</button>
+          <button onClick={onCancel} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid grid-cols-[1fr_80px_60px_90px_70px_90px] gap-2 py-2 items-center border-b border-gray-50 last:border-0">
+      <span className="text-sm font-medium text-gray-900">{sala.numero}</span>
+      <span className="text-sm text-gray-500">{sala.capacidade > 0 ? sala.capacidade : '—'}</span>
+      <span className="text-sm text-gray-500">{sala.bloco || '—'}</span>
+      <span className="text-sm text-gray-500">{sala.andar || '—'}</span>
+      <span>
+        {sala.acessivel
+          ? <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Sim</span>
+          : <span className="text-xs text-gray-300">Não</span>}
+      </span>
+      <div className="flex gap-2">
+        <button onClick={onEdit} className="text-xs text-gray-400 hover:text-indigo-600">Editar</button>
+        <button onClick={onDelete} className="text-xs text-gray-300 hover:text-red-400">Excluir</button>
       </div>
     </div>
   )

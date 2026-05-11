@@ -217,6 +217,8 @@ class Sala(Base):
     local_id = Column(String, ForeignKey("locais.id"), nullable=False)
     numero = Column(String, nullable=False)
     capacidade = Column(Integer, default=0)
+    bloco = Column(String)
+    andar = Column(String)
     acessivel = Column(Boolean, default=False)
     observacoes = Column(Text)
 

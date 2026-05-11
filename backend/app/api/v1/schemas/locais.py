@@ -36,8 +36,27 @@ class SalaCreate(BaseModel):
     local_id: str
     numero: str
     capacidade: Optional[int] = 0
+    bloco: Optional[str] = None
+    andar: Optional[str] = None
     acessivel: Optional[bool] = False
     observacoes: Optional[str] = None
+
+
+class SalaUpdate(BaseModel):
+    numero: Optional[str] = None
+    capacidade: Optional[int] = None
+    bloco: Optional[str] = None
+    andar: Optional[str] = None
+    acessivel: Optional[bool] = None
+    observacoes: Optional[str] = None
+
+
+class SalasBulkCreate(BaseModel):
+    quantidade: int
+    prefixo: str = "Sala"
+    capacidade: Optional[int] = 0
+    bloco: Optional[str] = None
+    andar: Optional[str] = None
 
 
 class SalaResponse(BaseModel):
@@ -45,6 +64,8 @@ class SalaResponse(BaseModel):
     local_id: str
     numero: str
     capacidade: int
+    bloco: Optional[str] = None
+    andar: Optional[str] = None
     acessivel: bool
     observacoes: Optional[str] = None
 
