@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.api.v1.services.periodos import (
     listar_periodos, criar_periodo, atualizar_periodo, deletar_periodo,
-    listar_cargos, atualizar_cargo, importar_cargos_xlsx, criar_cargo_manual
+    listar_cargos, atualizar_cargo, importar_cargos as svc_importar_cargos,
+    deletar_cargo, limpar_cargos, criar_cargo_manual
 )
 from app.api.v1.schemas.periodos import (
     PeriodoCreate, PeriodoUpdate, PeriodoResponse,
@@ -79,7 +80,25 @@ def importar_cargos(
     _: Usuario = Depends(require_logistica),
 ):
     conteudo = file.file.read()
-    return importar_cargos_xlsx(db, certame_id, conteudo)
+    return svc_importar_cargos(db, certame_id, conteudo, file.filename or "")
+
+@router.delete("/cargos", status_code=204)
+def delete_cargos(
+    certame_id: str,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_logistica),
+):
+    limpar_cargos(db, certame_id)
+
+
+@router.delete("/cargos/{cargo_id}", status_code=204)
+def delete_cargo(
+    cargo_id: str,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_logistica),
+):
+    deletar_cargo(db, cargo_id)
+
 
 from pydantic import BaseModel
 

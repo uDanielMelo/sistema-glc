@@ -188,7 +188,7 @@ class Local(Base):
     __tablename__ = "locais"
 
     id = Column(String, primary_key=True, default=gen_uuid)
-    certame_id = Column(String, ForeignKey("certames.id"), nullable=False)
+    certame_id = Column(String, ForeignKey("certames.id"), nullable=True)
     coordenador_id = Column(String, ForeignKey("usuarios.id"), nullable=True)
     nome = Column(String, nullable=False)
     codigo = Column(String)

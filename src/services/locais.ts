@@ -11,7 +11,7 @@ export interface Sala {
 
 export interface Local {
   id: string
-  certame_id: string
+  certame_id?: string | null
   nome: string
   codigo?: string
   endereco?: string
@@ -28,8 +28,8 @@ export interface Local {
 }
 
 export const locaisService = {
-  listar: async (certame_id: string): Promise<Local[]> => {
-    const { data } = await api.get('/locais', { params: { certame_id } })
+  listar: async (params?: { certame_id?: string; search?: string; cidade?: string; uf?: string }): Promise<Local[]> => {
+    const { data } = await api.get('/locais', { params })
     return data
   },
 
@@ -38,7 +38,7 @@ export const locaisService = {
     return data
   },
 
-  criar: async (payload: Omit<Local, 'id' | 'salas'>): Promise<Local> => {
+  criar: async (payload: Omit<Local, 'id' | 'salas' | 'certame_id'> & { certame_id?: string }): Promise<Local> => {
     const { data } = await api.post('/locais', payload)
     return data
   },
@@ -61,10 +61,11 @@ export const locaisService = {
     await api.delete(`/salas/${sala_id}`)
   },
 
-  importar: async (certame_id: string, file: File): Promise<Local[]> => {
+  importar: async (file: File, certame_id?: string): Promise<Local[]> => {
     const form = new FormData()
     form.append('file', file)
-    const { data } = await api.post(`/locais/importar?certame_id=${certame_id}`, form, {
+    const params = certame_id ? `?certame_id=${certame_id}` : ''
+    const { data } = await api.post(`/locais/importar${params}`, form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
     return data

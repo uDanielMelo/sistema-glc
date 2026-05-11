@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { certamesService } from '../services/certames'
+import { periodosService } from '../services/periodos'
+import type { Periodo, Cargo } from '../services/periodos'
 import type { Certame, CertameStatus } from '../types/index'
 
 const statusLabel: Record<CertameStatus, string> = {
@@ -104,7 +106,8 @@ export default function CertameDetalhe() {
             <Row label="Observações" value={certame.observacoes} />
           </div>
         )}
-        {activeTab !== 'Visão geral' && (
+        {activeTab === 'Períodos' && <TabPeriodos certameId={id!} />}
+        {activeTab !== 'Visão geral' && activeTab !== 'Períodos' && (
           <p className="text-gray-400 text-sm">
             Módulo <strong>{activeTab}</strong> em desenvolvimento.
           </p>
@@ -120,6 +123,88 @@ function Row({ label, value }: { label: string; value?: string }) {
     <div className="flex gap-4 text-sm">
       <span className="w-40 text-gray-400 shrink-0">{label}</span>
       <span className="text-gray-900">{value}</span>
+    </div>
+  )
+}
+
+function TabPeriodos({ certameId }: { certameId: string }) {
+  const [periodos, setPeriodos] = useState<Periodo[]>([])
+  const [cargos, setCargos] = useState<Cargo[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    Promise.all([
+      periodosService.listarPeriodos(certameId),
+      periodosService.listarCargos(certameId),
+    ]).then(([p, c]) => {
+      setPeriodos(p)
+      setCargos(c)
+    }).finally(() => setLoading(false))
+  }, [certameId])
+
+  if (loading) return <p className="text-gray-400 text-sm">Carregando...</p>
+
+  if (periodos.length === 0) {
+    return (
+      <div className="py-8 text-center">
+        <p className="text-gray-400 text-sm">Nenhuma divisão de períodos configurada.</p>
+        <p className="text-gray-300 text-xs mt-1">Acesse "Divisão de Períodos" no menu para configurar.</p>
+      </div>
+    )
+  }
+
+  const cargosEspera = cargos.filter(c => !c.periodo_id)
+
+  return (
+    <div className="space-y-4">
+      {periodos.map(p => {
+        const lista = cargos.filter(c => c.periodo_id === p.id)
+        const totalInsc = lista.reduce((s, c) => s + c.total_inscritos, 0)
+        const totalDef = lista.reduce((s, c) => s + c.total_deferidos, 0)
+        return (
+          <div key={p.id} className="border border-gray-200 rounded-xl overflow-hidden">
+            <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full">{p.numero}º</span>
+                <span className="text-sm font-medium text-gray-900">{p.label || `Período ${p.numero}`}</span>
+              </div>
+              <div className="text-xs text-gray-400">
+                {lista.length} cargo{lista.length !== 1 ? 's' : ''}
+                {totalInsc > 0 && ` · ${totalInsc.toLocaleString('pt-BR')} inscritos`}
+                {totalDef > 0 && ` · ${totalDef.toLocaleString('pt-BR')} deferidos`}
+              </div>
+            </div>
+            {lista.length > 0 ? (
+              <div className="divide-y divide-gray-100">
+                {lista.map(c => (
+                  <div key={c.id} className="px-4 py-2.5 flex items-center justify-between text-sm">
+                    <span className="text-gray-800">{c.nome}</span>
+                    <div className="flex gap-4 text-xs text-gray-400">
+                      {c.total_inscritos > 0 && <span>{c.total_inscritos.toLocaleString('pt-BR')} inscritos</span>}
+                      {c.total_deferidos > 0 && <span>{c.total_deferidos.toLocaleString('pt-BR')} deferidos</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="px-4 py-3 text-xs text-gray-300">Nenhum cargo atribuído.</p>
+            )}
+          </div>
+        )
+      })}
+      {cargosEspera.length > 0 && (
+        <div className="border border-amber-200 rounded-xl overflow-hidden">
+          <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 flex items-center gap-2">
+            <span className="text-sm font-medium text-amber-700">Aguardando atribuição</span>
+            <span className="text-xs text-amber-400">{cargosEspera.length} cargo{cargosEspera.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {cargosEspera.map(c => (
+              <div key={c.id} className="px-4 py-2.5 text-sm text-gray-600">{c.nome}</div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

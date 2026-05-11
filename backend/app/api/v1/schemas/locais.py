@@ -3,7 +3,7 @@ from typing import Optional
 
 
 class LocalCreate(BaseModel):
-    certame_id: str
+    certame_id: Optional[str] = None
     nome: str
     codigo: Optional[str] = None
     endereco: Optional[str] = None
@@ -54,7 +54,7 @@ class SalaResponse(BaseModel):
 
 class LocalResponse(BaseModel):
     id: str
-    certame_id: str
+    certame_id: Optional[str] = None
     nome: str
     codigo: Optional[str] = None
     endereco: Optional[str] = None

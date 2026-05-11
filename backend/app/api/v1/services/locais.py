@@ -4,10 +4,23 @@ from app.models.models import Local, Sala
 from app.api.v1.schemas.locais import LocalCreate, LocalUpdate, SalaCreate
 
 
-def listar_locais(db: Session, certame_id: str) -> list[Local]:
-    return db.query(Local).filter(
-        Local.certame_id == certame_id
-    ).order_by(Local.nome).all()
+def listar_locais(
+    db: Session,
+    certame_id: str | None = None,
+    search: str | None = None,
+    cidade: str | None = None,
+    uf: str | None = None,
+) -> list[Local]:
+    q = db.query(Local)
+    if certame_id:
+        q = q.filter(Local.certame_id == certame_id)
+    if search:
+        q = q.filter(Local.nome.ilike(f"%{search}%"))
+    if cidade:
+        q = q.filter(Local.cidade.ilike(f"%{cidade}%"))
+    if uf:
+        q = q.filter(Local.uf == uf.upper())
+    return q.order_by(Local.nome).all()
 
 
 def buscar_local(db: Session, local_id: str) -> Local:
@@ -72,7 +85,7 @@ def deletar_sala(db: Session, sala_id: str) -> None:
         db.commit()
 
 
-def importar_locais_xlsx(db: Session, certame_id: str, conteudo: bytes) -> list[Local]:
+def importar_locais_xlsx(db: Session, conteudo: bytes, certame_id: str | None = None) -> list[Local]:
     import io
     import pandas as pd
     import unicodedata

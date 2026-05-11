@@ -115,6 +115,22 @@ export default function DivisaoPeriodos() {
     await periodosService.atualizarCargo(cargoId, novoPeriodoId)
   }
 
+  const handleDeleteCargo = async (id: string) => {
+    await periodosService.deletarCargo(id)
+    setCargos(prev => prev.filter(c => c.id !== id))
+  }
+
+  const handleLimparCargos = async () => {
+    if (!editando || !window.confirm('Remover todos os cargos importados?')) return
+    setLoading(true)
+    try {
+      await periodosService.limparCargos(editando)
+      setCargos([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const gerarRelatorio = () => {
     const certame = certames.find(c => c.id === editando)
     const html = gerarHTML(certame, periodos, cargos)
@@ -167,12 +183,18 @@ export default function DivisaoPeriodos() {
           {periodos.length > 0 && (
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Importar planilha de cargos</label>
-              <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={importarXlsx} className="hidden" />
+              <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={importarXlsx} className="hidden" />
               <button onClick={() => fileRef.current?.click()} disabled={loading}
                 className="border border-gray-300 rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50">
                 {loading ? 'Importando...' : 'Selecionar arquivo'}
               </button>
             </div>
+          )}
+          {periodos.length > 0 && cargos.length > 0 && (
+            <button onClick={handleLimparCargos} disabled={loading}
+              className="border border-red-200 text-red-500 px-4 py-2 rounded-lg text-sm hover:bg-red-50 disabled:opacity-50">
+              Limpar cargos
+            </button>
           )}
         </div>
 
@@ -199,7 +221,7 @@ export default function DivisaoPeriodos() {
                         +
                       </button>
                     </div>
-                    <DroppableArea id="espera" cargos={cargosEspera} />
+                    <DroppableArea id="espera" cargos={cargosEspera} onDelete={handleDeleteCargo} />
                   </div>
                 </div>
               </div>
@@ -208,6 +230,7 @@ export default function DivisaoPeriodos() {
                   titulo={p.label || `Período ${p.numero}`}
                   cargos={cargos.filter(c => c.periodo_id === p.id)}
                   numero={p.numero}
+                  onDelete={handleDeleteCargo}
                 />
               ))}
             </div>
@@ -280,16 +303,16 @@ export default function DivisaoPeriodos() {
   )
 }
 
-function DroppableArea({ id, cargos }: { id: string; cargos: Cargo[] }) {
+function DroppableArea({ id, cargos, onDelete }: { id: string; cargos: Cargo[]; onDelete?: (id: string) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id })
   return (
     <div ref={setNodeRef} className={`min-h-32 space-y-1.5 rounded-lg transition-colors ${isOver ? 'bg-indigo-50' : ''}`}>
-      {cargos.map(c => <CargoCard key={c.id} cargo={c} />)}
+      {cargos.map(c => <CargoCard key={c.id} cargo={c} onDelete={onDelete} />)}
     </div>
   )
 }
 
-function ColunaCargos({ id, titulo, cargos, numero }: { id: string; titulo: string; cargos: Cargo[]; numero?: number }) {
+function ColunaCargos({ id, titulo, cargos, numero, onDelete }: { id: string; titulo: string; cargos: Cargo[]; numero?: number; onDelete?: (id: string) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id })
   const total = cargos.reduce((s, c) => s + c.total_inscritos, 0)
   return (
@@ -303,21 +326,30 @@ function ColunaCargos({ id, titulo, cargos, numero }: { id: string; titulo: stri
           {numero && <span className="text-xs font-bold text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full">{numero}º</span>}
         </div>
         <div ref={setNodeRef} className="p-2 min-h-32 space-y-1.5">
-          {cargos.map(c => <CargoCard key={c.id} cargo={c} />)}
+          {cargos.map(c => <CargoCard key={c.id} cargo={c} onDelete={onDelete} />)}
         </div>
       </div>
     </div>
   )
 }
 
-function CargoCard({ cargo, isDragging }: { cargo: Cargo; isDragging?: boolean }) {
+function CargoCard({ cargo, isDragging, onDelete }: { cargo: Cargo; isDragging?: boolean; onDelete?: (id: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging: dragging } = useDraggable({ id: cargo.id })
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined
   return (
     <div ref={setNodeRef} style={style} {...listeners} {...attributes}
-      className={`bg-white border rounded-lg px-3 py-2 cursor-grab text-xs select-none transition-shadow ${dragging || isDragging ? 'opacity-50 shadow-lg' : 'border-gray-200 hover:border-indigo-300 hover:shadow-sm'}`}>
-      <div className="font-medium text-gray-800 leading-snug">{cargo.nome}</div>
+      className={`group relative bg-white border rounded-lg px-3 py-2 cursor-grab text-xs select-none transition-shadow ${dragging || isDragging ? 'opacity-50 shadow-lg' : 'border-gray-200 hover:border-indigo-300 hover:shadow-sm'}`}>
+      <div className="font-medium text-gray-800 leading-snug pr-4">{cargo.nome}</div>
       {cargo.total_inscritos > 0 && <div className="text-gray-400 mt-0.5">{cargo.total_inscritos.toLocaleString('pt-BR')} inscritos</div>}
+      {onDelete && !isDragging && (
+        <button
+          onPointerDown={e => e.stopPropagation()}
+          onClick={() => onDelete(cargo.id)}
+          className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition-opacity leading-none"
+        >
+          ×
+        </button>
+      )}
     </div>
   )
 }

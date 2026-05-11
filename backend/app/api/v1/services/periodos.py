@@ -73,24 +73,53 @@ def _int_safe(val) -> int:
         return 0
 
 
-def importar_cargos_xlsx(db: Session, certame_id: str, conteudo: bytes) -> list[Cargo]:
+def deletar_cargo(db: Session, cargo_id: str) -> None:
+    cargo = db.query(Cargo).filter(Cargo.id == cargo_id).first()
+    if not cargo:
+        raise HTTPException(status_code=404, detail="Cargo não encontrado")
+    db.delete(cargo)
+    db.commit()
+
+
+def limpar_cargos(db: Session, certame_id: str) -> None:
+    certame = db.query(Certame).filter(Certame.id == certame_id).first()
+    if not certame:
+        raise HTTPException(status_code=404, detail="Certame não encontrado")
+    db.query(Cargo).filter(Cargo.certame_id == certame_id).delete()
+    db.commit()
+
+
+def _carregar_dataframe(conteudo: bytes, filename: str) -> "pd.DataFrame":
+    import io
+    if filename.lower().endswith(".csv"):
+        for enc in ("utf-8", "latin-1"):
+            for sep in (",", ";", "\t"):
+                try:
+                    df = pd.read_csv(io.BytesIO(conteudo), sep=sep, encoding=enc)
+                    if len(df.columns) > 1:
+                        return df
+                except Exception:
+                    continue
+        return pd.read_csv(io.BytesIO(conteudo), encoding="latin-1")
+    else:
+        xl = pd.ExcelFile(io.BytesIO(conteudo))
+        aba = None
+        for nome in xl.sheet_names:
+            n = _norm(nome)
+            if n in ("BANCO", "DADOS", "CARGOS", "INSCRICOES"):
+                aba = nome
+                break
+        if aba is None:
+            aba = xl.sheet_names[0]
+        return pd.read_excel(io.BytesIO(conteudo), sheet_name=aba)
+
+
+def importar_cargos(db: Session, certame_id: str, conteudo: bytes, filename: str = "") -> list[Cargo]:
     certame = db.query(Certame).filter(Certame.id == certame_id).first()
     if not certame:
         raise HTTPException(status_code=404, detail="Certame não encontrado")
 
-    import io
-    xl = pd.ExcelFile(io.BytesIO(conteudo))
-
-    aba = None
-    for nome in xl.sheet_names:
-        n = _norm(nome)
-        if n in ("BANCO", "DADOS", "CARGOS", "INSCRICOES", "INSCRICOES"):
-            aba = nome
-            break
-    if aba is None:
-        aba = xl.sheet_names[0]
-
-    df = pd.read_excel(io.BytesIO(conteudo), sheet_name=aba)
+    df = _carregar_dataframe(conteudo, filename)
     cols = {_norm(c): c for c in df.columns}
 
     col_cargo = None

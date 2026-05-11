@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, UploadFile, File
+from fastapi import APIRouter, Depends, UploadFile, File, Query
 from sqlalchemy.orm import Session
+from typing import Optional
 from app.db.session import get_db
 from app.api.v1.schemas.locais import (
     LocalCreate, LocalUpdate, LocalResponse, SalaCreate, SalaResponse
@@ -17,11 +18,14 @@ router = APIRouter()
 
 @router.get("/locais", response_model=list[LocalResponse])
 def get_locais(
-    certame_id: str,
+    certame_id: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    cidade: Optional[str] = Query(None),
+    uf: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     _: Usuario = Depends(require_logistica),
 ):
-    return listar_locais(db, certame_id)
+    return listar_locais(db, certame_id=certame_id, search=search, cidade=cidade, uf=uf)
 
 
 @router.get("/locais/{local_id}", response_model=LocalResponse)
@@ -83,10 +87,10 @@ def delete_sala(
 
 @router.post("/locais/importar", response_model=list[LocalResponse])
 def importar_locais(
-    certame_id: str,
     file: UploadFile = File(...),
+    certame_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     _: Usuario = Depends(require_logistica),
 ):
     conteudo = file.file.read()
-    return importar_locais_xlsx(db, certame_id, conteudo)
+    return importar_locais_xlsx(db, conteudo, certame_id=certame_id)

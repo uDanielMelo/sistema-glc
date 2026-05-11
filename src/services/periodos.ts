@@ -58,6 +58,14 @@ export const periodosService = {
     return data
   },
 
+  deletarCargo: async (id: string): Promise<void> => {
+    await api.delete(`/cargos/${id}`)
+  },
+
+  limparCargos: async (certame_id: string): Promise<void> => {
+    await api.delete('/cargos', { params: { certame_id } })
+  },
+
   criarCargoManual: async (certame_id: string, nome: string): Promise<Cargo> => {
     const { data } = await api.post('/cargos', { certame_id, nome })
     return data
