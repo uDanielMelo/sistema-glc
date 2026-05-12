@@ -20,8 +20,17 @@ export type CertameStatus =
   | 'rascunho'
   | 'planejamento'
   | 'em_andamento'
+  | 'finalizado'
   | 'concluido'
   | 'cancelado'
+
+export type TipoProva =
+  | 'objetiva'
+  | 'discursiva'
+  | 'pratica'
+  | 'taf'
+  | 'redacao'
+  | 'outro'
 
 export interface Certame {
   id: string
@@ -30,6 +39,7 @@ export interface Certame {
   numero_edital?: string
   orgao?: string
   tipo?: string
+  tipo_prova?: TipoProva
   data_aplicacao?: string
   status: CertameStatus
   observacoes?: string

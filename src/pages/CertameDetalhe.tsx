@@ -3,14 +3,16 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { certamesService } from '../services/certames'
 import { periodosService } from '../services/periodos'
 import { locaisService } from '../services/locais'
+import { arquivosService, type CertameArquivo } from '../services/arquivos'
 import type { Periodo, Cargo } from '../services/periodos'
 import type { Local } from '../services/locais'
-import type { Certame, CertameStatus } from '../types/index'
+import type { Certame, CertameStatus, TipoProva } from '../types/index'
 
 const statusLabel: Record<CertameStatus, string> = {
   rascunho: 'Rascunho',
   planejamento: 'Planejamento',
   em_andamento: 'Em andamento',
+  finalizado: 'Finalizado',
   concluido: 'Concluído',
   cancelado: 'Cancelado',
 }
@@ -19,8 +21,18 @@ const statusColor: Record<CertameStatus, string> = {
   rascunho: 'bg-gray-100 text-gray-600',
   planejamento: 'bg-blue-100 text-blue-700',
   em_andamento: 'bg-amber-100 text-amber-700',
+  finalizado: 'bg-green-100 text-green-700',
   concluido: 'bg-green-100 text-green-700',
   cancelado: 'bg-red-100 text-red-600',
+}
+
+const tipoProvaLabel: Record<TipoProva, string> = {
+  objetiva: 'Objetiva',
+  discursiva: 'Discursiva',
+  pratica: 'Prática',
+  taf: 'TAF',
+  redacao: 'Redação',
+  outro: 'Outro',
 }
 
 const tabs = ['Visão geral', 'Períodos', 'Locais', 'Equipes', 'Candidatos', 'Ocorrências']
@@ -30,15 +42,113 @@ export default function CertameDetalhe() {
   const navigate = useNavigate()
   const [certame, setCertame] = useState<Certame | null>(null)
   const [loading, setLoading] = useState(true)
+  const [mudandoStatus, setMudandoStatus] = useState(false)
   const [activeTab, setActiveTab] = useState('Visão geral')
+  const [editando, setEditando] = useState(false)
+  const [formEdit, setFormEdit] = useState({
+    titulo: '',
+    orgao: '',
+    numero_edital: '',
+    tipo: '',
+    tipo_prova: '',
+    data_aplicacao: '',
+    observacoes: '',
+  })
+  const [salvandoEdit, setSalvandoEdit] = useState(false)
+  const [arquivos, setArquivos] = useState<CertameArquivo[]>([])
+  const [loadingArquivos, setLoadingArquivos] = useState(false)
+  const [showUpload, setShowUpload] = useState(false)
+  const [uploadTitulo, setUploadTitulo] = useState('')
+  const [uploadArquivo, setUploadArquivo] = useState<File | null>(null)
+  const [enviando, setEnviando] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!id) return
     certamesService.buscar(id).then(setCertame).finally(() => setLoading(false))
   }, [id])
 
+  useEffect(() => {
+    if (!id || activeTab !== 'Visão geral') return
+    setLoadingArquivos(true)
+    arquivosService.listar(id).then(setArquivos).finally(() => setLoadingArquivos(false))
+  }, [id, activeTab])
+
+  const abrirEdicao = () => {
+    if (!certame) return
+    setFormEdit({
+      titulo: certame.titulo,
+      orgao: certame.orgao ?? '',
+      numero_edital: certame.numero_edital ?? '',
+      tipo: certame.tipo ?? '',
+      tipo_prova: certame.tipo_prova ?? '',
+      data_aplicacao: certame.data_aplicacao ? certame.data_aplicacao.slice(0, 10) : '',
+      observacoes: certame.observacoes ?? '',
+    })
+    setEditando(true)
+  }
+
+  const salvarEdicao = async () => {
+    if (!certame) return
+    setSalvandoEdit(true)
+    try {
+      const payload = {
+        ...formEdit,
+        tipo_prova: formEdit.tipo_prova || undefined,
+        data_aplicacao: formEdit.data_aplicacao || undefined,
+        orgao: formEdit.orgao || undefined,
+        numero_edital: formEdit.numero_edital || undefined,
+        tipo: formEdit.tipo || undefined,
+        observacoes: formEdit.observacoes || undefined,
+      }
+      const atualizado = await certamesService.atualizar(certame.id, payload)
+      setCertame(atualizado)
+      setEditando(false)
+    } finally {
+      setSalvandoEdit(false)
+    }
+  }
+
+  const enviarArquivo = async () => {
+    if (!certame || !uploadArquivo || !uploadTitulo.trim()) return
+    setEnviando(true)
+    try {
+      const novo = await arquivosService.upload(certame.id, uploadTitulo.trim(), uploadArquivo)
+      setArquivos(prev => [novo, ...prev])
+      setUploadTitulo('')
+      setUploadArquivo(null)
+      setShowUpload(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  const removerArquivo = async (arquivoId: string) => {
+    if (!certame || !window.confirm('Remover este arquivo?')) return
+    await arquivosService.deletar(certame.id, arquivoId)
+    setArquivos(prev => prev.filter(a => a.id !== arquivoId))
+  }
+
+  const selecionarStatus = async (novoStatus: CertameStatus) => {
+    if (!certame || certame.status === novoStatus) return
+    setMudandoStatus(true)
+    try {
+      const atualizado = await certamesService.mudarStatus(certame.id, novoStatus)
+      setCertame(atualizado)
+    } finally {
+      setMudandoStatus(false)
+    }
+  }
+
   if (loading) return <p className="text-gray-400 text-sm">Carregando...</p>
   if (!certame) return <p className="text-gray-400 text-sm">Certame não encontrado.</p>
+
+  const STATUS_OPCOES: { value: CertameStatus; label: string }[] = [
+    { value: 'rascunho', label: 'Rascunho' },
+    { value: 'em_andamento', label: 'Em andamento' },
+    { value: 'finalizado', label: 'Finalizado' },
+  ]
 
   return (
     <div>
@@ -50,7 +160,7 @@ export default function CertameDetalhe() {
       </button>
 
       <div className="bg-white border border-gray-200 rounded-xl px-6 py-5 mb-6">
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">{certame.titulo}</h2>
             <div className="flex gap-4 mt-1 text-sm text-gray-400">
@@ -61,9 +171,25 @@ export default function CertameDetalhe() {
               )}
             </div>
           </div>
-          <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusColor[certame.status]}`}>
-            {statusLabel[certame.status]}
-          </span>
+          <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden shrink-0">
+            {STATUS_OPCOES.map((op) => {
+              const ativo = certame.status === op.value
+              return (
+                <button
+                  key={op.value}
+                  onClick={() => selecionarStatus(op.value)}
+                  disabled={mudandoStatus}
+                  className={`px-3 py-1.5 text-xs font-medium transition-colors border-r border-gray-200 last:border-r-0 disabled:opacity-50 ${
+                    ativo
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-white text-gray-500 hover:bg-gray-50'
+                  }`}
+                >
+                  {op.label}
+                </button>
+              )
+            })}
+          </div>
         </div>
 
         {certame.observacoes && (
@@ -91,22 +217,208 @@ export default function CertameDetalhe() {
 
       <div className="bg-white border border-gray-200 rounded-xl p-6">
         {activeTab === 'Visão geral' && (
-          <div className="space-y-3">
-            <Row label="Título" value={certame.titulo} />
-            <Row label="Órgão" value={certame.orgao} />
-            <Row label="Número do edital" value={certame.numero_edital} />
-            <Row label="Tipo" value={certame.tipo} />
-            <Row
-              label="Data de aplicação"
-              value={
-                certame.data_aplicacao
-                  ? new Date(certame.data_aplicacao).toLocaleDateString('pt-BR')
-                  : undefined
-              }
-            />
-            <Row label="Status" value={statusLabel[certame.status]} />
-            <Row label="Observações" value={certame.observacoes} />
-          </div>
+          editando ? (
+            <div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-xs text-gray-500 mb-1">Título *</label>
+                  <input
+                    required
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formEdit.titulo}
+                    onChange={e => setFormEdit(p => ({ ...p, titulo: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Órgão</label>
+                  <input
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formEdit.orgao}
+                    onChange={e => setFormEdit(p => ({ ...p, orgao: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Número do edital</label>
+                  <input
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formEdit.numero_edital}
+                    onChange={e => setFormEdit(p => ({ ...p, numero_edital: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Tipo</label>
+                  <input
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="ex: concurso público"
+                    value={formEdit.tipo}
+                    onChange={e => setFormEdit(p => ({ ...p, tipo: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Tipo de prova</label>
+                  <select
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formEdit.tipo_prova}
+                    onChange={e => setFormEdit(p => ({ ...p, tipo_prova: e.target.value }))}
+                  >
+                    <option value="">Selecione...</option>
+                    <option value="objetiva">Objetiva</option>
+                    <option value="discursiva">Discursiva</option>
+                    <option value="pratica">Prática</option>
+                    <option value="taf">TAF</option>
+                    <option value="redacao">Redação</option>
+                    <option value="outro">Outro</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Data de aplicação</label>
+                  <input
+                    type="date"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={formEdit.data_aplicacao}
+                    onChange={e => setFormEdit(p => ({ ...p, data_aplicacao: e.target.value }))}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs text-gray-500 mb-1">Observações</label>
+                  <textarea
+                    rows={3}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                    value={formEdit.observacoes}
+                    onChange={e => setFormEdit(p => ({ ...p, observacoes: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={() => setEditando(false)}
+                  className="flex-1 border border-gray-300 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={salvarEdicao}
+                  disabled={salvandoEdit || !formEdit.titulo.trim()}
+                  className="flex-1 bg-indigo-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {salvandoEdit ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div className="flex justify-end mb-3">
+                <button
+                  onClick={abrirEdicao}
+                  className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" />
+                  </svg>
+                  Editar
+                </button>
+              </div>
+              <div className="space-y-3">
+                <Row label="Título" value={certame.titulo} />
+                <Row label="Órgão" value={certame.orgao} />
+                <Row label="Número do edital" value={certame.numero_edital} />
+                <Row label="Tipo" value={certame.tipo} />
+                <Row label="Tipo de prova" value={certame.tipo_prova ? tipoProvaLabel[certame.tipo_prova] : undefined} />
+                <Row
+                  label="Data de aplicação"
+                  value={
+                    certame.data_aplicacao
+                      ? new Date(certame.data_aplicacao).toLocaleDateString('pt-BR')
+                      : undefined
+                  }
+                />
+                <Row label="Status" value={statusLabel[certame.status]} />
+                <Row label="Observações" value={certame.observacoes} />
+              </div>
+
+              {/* Arquivos */}
+              <div className="mt-6 pt-5 border-t border-gray-100">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-semibold text-gray-700">Arquivos</h4>
+                  <button
+                    onClick={() => setShowUpload(v => !v)}
+                    className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Adicionar
+                  </button>
+                </div>
+
+                {showUpload && (
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-3 space-y-2">
+                    <input
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      placeholder="Título do arquivo (ex: Edital)"
+                      value={uploadTitulo}
+                      onChange={e => setUploadTitulo(e.target.value)}
+                    />
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                      onChange={e => setUploadArquivo(e.target.files?.[0] ?? null)}
+                    />
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        onClick={() => { setShowUpload(false); setUploadTitulo(''); setUploadArquivo(null) }}
+                        className="flex-1 border border-gray-300 rounded-lg py-1.5 text-xs text-gray-600 hover:bg-gray-100"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={enviarArquivo}
+                        disabled={enviando || !uploadTitulo.trim() || !uploadArquivo}
+                        className="flex-1 bg-indigo-600 text-white rounded-lg py-1.5 text-xs font-medium hover:bg-indigo-700 disabled:opacity-50"
+                      >
+                        {enviando ? 'Enviando...' : 'Enviar'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {loadingArquivos ? (
+                  <p className="text-xs text-gray-400">Carregando...</p>
+                ) : arquivos.length === 0 ? (
+                  <p className="text-xs text-gray-400">Nenhum arquivo adicionado.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {arquivos.map(arq => (
+                      <div key={arq.id} className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+                        <svg className="w-8 h-8 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-800 truncate">{arq.titulo}</p>
+                          <p className="text-xs text-gray-400 truncate">{arq.nome_original}{arq.tamanho ? ` · ${(arq.tamanho / 1024).toFixed(0)} KB` : ''}</p>
+                        </div>
+                        <button
+                          onClick={() => arquivosService.abrir(certame.id, arq.id, arq.nome_original)}
+                          className="text-xs text-indigo-600 hover:text-indigo-800 font-medium shrink-0"
+                        >
+                          Abrir
+                        </button>
+                        <button
+                          onClick={() => removerArquivo(arq.id)}
+                          className="text-gray-300 hover:text-red-400 transition-colors shrink-0"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )
         )}
         {activeTab === 'Períodos' && <TabPeriodos certameId={id!} />}
         {activeTab === 'Locais' && <TabLocais certameId={id!} />}

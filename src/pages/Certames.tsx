@@ -7,6 +7,7 @@ const statusLabel: Record<CertameStatus, string> = {
   rascunho: 'Rascunho',
   planejamento: 'Planejamento',
   em_andamento: 'Em andamento',
+  finalizado: 'Finalizado',
   concluido: 'Concluído',
   cancelado: 'Cancelado',
 }
@@ -15,6 +16,7 @@ const statusColor: Record<CertameStatus, string> = {
   rascunho: 'bg-gray-100 text-gray-600',
   planejamento: 'bg-blue-100 text-blue-700',
   em_andamento: 'bg-amber-100 text-amber-700',
+  finalizado: 'bg-green-100 text-green-700',
   concluido: 'bg-green-100 text-green-700',
   cancelado: 'bg-red-100 text-red-600',
 }
@@ -106,6 +108,7 @@ function NovoCertameModal({
     numero_edital: '',
     orgao: '',
     tipo: '',
+    tipo_prova: '',
     data_aplicacao: '',
     observacoes: '',
   })
@@ -119,6 +122,7 @@ function NovoCertameModal({
     try {
       const payload = {
         ...form,
+        tipo_prova: form.tipo_prova || undefined,
         data_aplicacao: form.data_aplicacao || undefined,
       }
       const certame = await certamesService.criar(payload)
@@ -160,6 +164,19 @@ function NovoCertameModal({
             value={form.tipo}
             onChange={(e) => setForm({ ...form, tipo: e.target.value })}
           />
+          <select
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-700"
+            value={form.tipo_prova}
+            onChange={(e) => setForm({ ...form, tipo_prova: e.target.value })}
+          >
+            <option value="">Tipo de prova (opcional)</option>
+            <option value="objetiva">Objetiva</option>
+            <option value="discursiva">Discursiva</option>
+            <option value="pratica">Prática</option>
+            <option value="taf">TAF</option>
+            <option value="redacao">Redação</option>
+            <option value="outro">Outro</option>
+          </select>
           <input
             type="date"
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"

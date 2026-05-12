@@ -36,8 +36,18 @@ class CertameStatus(str, enum.Enum):
     rascunho = "rascunho"
     planejamento = "planejamento"
     em_andamento = "em_andamento"
+    finalizado = "finalizado"
     concluido = "concluido"
     cancelado = "cancelado"
+
+
+class TipoProva(str, enum.Enum):
+    objetiva = "objetiva"
+    discursiva = "discursiva"
+    pratica = "pratica"
+    taf = "taf"
+    redacao = "redacao"
+    outro = "outro"
 
 
 class ImportacaoTipo(str, enum.Enum):
@@ -53,6 +63,12 @@ class ImportacaoStatus(str, enum.Enum):
     processando = "processando"
     concluido = "concluido"
     erro = "erro"
+
+
+class ColaboradorStatus(str, enum.Enum):
+    pendente = "pendente"
+    ativo = "ativo"
+    inativo = "inativo"
 
 
 class OcorrenciaTipo(str, enum.Enum):
@@ -117,6 +133,7 @@ class Certame(Base):
     tipo = Column(String)                   # concurso público, PSS, etc
     data_aplicacao = Column(DateTime)
     status = Column(SAEnum(CertameStatus), default=CertameStatus.rascunho)
+    tipo_prova = Column(SAEnum(TipoProva), nullable=True)
     observacoes = Column(Text)
     criado_em = Column(DateTime, default=now)
     atualizado_em = Column(DateTime, default=now, onupdate=now)
@@ -126,6 +143,23 @@ class Certame(Base):
     cargos = relationship("Cargo", back_populates="certame", cascade="all, delete-orphan")
     locais = relationship("Local", back_populates="certame", cascade="all, delete-orphan")
     importacoes = relationship("Importacao", back_populates="certame", cascade="all, delete-orphan")
+    colaboradores = relationship("CertameColaborador", back_populates="certame", cascade="all, delete-orphan")
+    arquivos = relationship("CertameArquivo", back_populates="certame", cascade="all, delete-orphan")
+
+
+class CertameArquivo(Base):
+    __tablename__ = "certame_arquivos"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    certame_id = Column(String, ForeignKey("certames.id"), nullable=False)
+    titulo = Column(String, nullable=False)
+    nome_original = Column(String, nullable=False)
+    caminho = Column(String, nullable=False)
+    mime_type = Column(String)
+    tamanho = Column(Integer)
+    criado_em = Column(DateTime, default=now)
+
+    certame = relationship("Certame", back_populates="arquivos")
 
 
 # ── Períodos e Cargos ─────────────────────────────────────────────────────────
@@ -225,22 +259,54 @@ class Sala(Base):
     ocorrencias = relationship("Ocorrencia", back_populates="sala")
 
 
-# ── Colaboradores (cadastro independente) ────────────────────────────────────
+# ── Colaboradores (cadastro independente com portal próprio) ──────────────────
 
 class Coordenador(Base):
     __tablename__ = "coordenadores"
 
     id = Column(String, primary_key=True, default=gen_uuid)
     nome = Column(String, nullable=False)
-    cpf = Column(String)
+    cpf = Column(String, unique=True)
     celular = Column(String)
+    # auth do portal
+    email = Column(String)
+    senha_hash = Column(String)
+    token_convite = Column(String, unique=True)
+    token_expiry = Column(DateTime)
+    status = Column(SAEnum(ColaboradorStatus), nullable=False, default=ColaboradorStatus.pendente)
+    # dados pessoais (preenchidos pelo colaborador)
+    data_nascimento = Column(String)
+    rg = Column(String)
+    cep = Column(String)
+    endereco = Column(String)
+    numero = Column(String)
+    complemento = Column(String)
+    bairro = Column(String)
+    cidade = Column(String)
+    estado = Column(String(2))
+    # dados bancários
     chave_pix = Column(String)
-    tipo_chave_pix = Column(String)  # cpf | telefone | email | aleatoria
+    tipo_chave_pix = Column(String)
     banco = Column(String)
     agencia = Column(String)
     conta = Column(String)
     observacoes = Column(Text)
     criado_em = Column(DateTime, default=now)
+
+    certames_vinculados = relationship("CertameColaborador", back_populates="colaborador", cascade="all, delete-orphan")
+
+
+class CertameColaborador(Base):
+    __tablename__ = "certame_colaboradores"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    certame_id = Column(String, ForeignKey("certames.id"), nullable=False)
+    coordenador_id = Column(String, ForeignKey("coordenadores.id"), nullable=False)
+    funcao = Column(String)
+    criado_em = Column(DateTime, default=now)
+
+    certame = relationship("Certame", back_populates="colaboradores")
+    colaborador = relationship("Coordenador", back_populates="certames_vinculados")
 
 
 class Fiscal(Base):

@@ -41,7 +41,11 @@ def deletar_certame(db: Session, certame_id: str, tenant_id: str) -> None:
     db.commit()
 
 
+_STATUS_GERENCIAVEIS = {CertameStatus.rascunho, CertameStatus.em_andamento, CertameStatus.finalizado}
+
 def mudar_status(db: Session, certame_id: str, status: CertameStatus, tenant_id: str) -> Certame:
+    if status not in _STATUS_GERENCIAVEIS:
+        raise HTTPException(status_code=422, detail=f"Status '{status}' não pode ser definido manualmente.")
     certame = buscar_certame(db, certame_id, tenant_id)
     certame.status = status
     db.commit()
