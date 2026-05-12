@@ -16,6 +16,7 @@ export default function Dashboard({ children }: { children?: React.ReactNode }) 
     { label: 'Certames', path: '/certames' },
     { label: 'Divisão de Períodos', path: '/divisao-periodos' },
     { label: 'Locais de Prova', path: '/locais' },
+    { label: 'Colaboradores', path: '/colaboradores' },
   ]
 
   return (

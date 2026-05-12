@@ -32,6 +32,10 @@ class LocalUpdate(BaseModel):
     coordenador_id: Optional[str] = None
 
 
+class VincularCertameSchema(BaseModel):
+    certame_id: Optional[str] = None
+
+
 class SalaCreate(BaseModel):
     local_id: str
     numero: str

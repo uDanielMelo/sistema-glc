@@ -3,12 +3,12 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from app.db.session import get_db
 from app.api.v1.schemas.locais import (
-    LocalCreate, LocalUpdate, LocalResponse,
+    LocalCreate, LocalUpdate, LocalResponse, VincularCertameSchema,
     SalaCreate, SalaUpdate, SalasBulkCreate, SalaResponse
 )
 from app.api.v1.services.locais import (
     listar_locais, buscar_local, criar_local, atualizar_local, deletar_local,
-    criar_sala, atualizar_sala, deletar_sala, criar_salas_lote,
+    vincular_certame, criar_sala, atualizar_sala, deletar_sala, criar_salas_lote,
     importar_salas, importar_locais_xlsx
 )
 from app.core.deps import require_logistica
@@ -20,13 +20,14 @@ router = APIRouter()
 @router.get("/locais", response_model=list[LocalResponse])
 def get_locais(
     certame_id: Optional[str] = Query(None),
+    standalone: bool = Query(False),
     search: Optional[str] = Query(None),
     cidade: Optional[str] = Query(None),
     uf: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     _: Usuario = Depends(require_logistica),
 ):
-    return listar_locais(db, certame_id=certame_id, search=search, cidade=cidade, uf=uf)
+    return listar_locais(db, certame_id=certame_id, standalone=standalone, search=search, cidade=cidade, uf=uf)
 
 
 @router.get("/locais/{local_id}", response_model=LocalResponse)
@@ -55,6 +56,16 @@ def put_local(
     _: Usuario = Depends(require_logistica),
 ):
     return atualizar_local(db, local_id, data)
+
+
+@router.patch("/locais/{local_id}/certame", response_model=LocalResponse)
+def patch_local_certame(
+    local_id: str,
+    data: VincularCertameSchema,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_logistica),
+):
+    return vincular_certame(db, local_id, data.certame_id)
 
 
 @router.delete("/locais/{local_id}", status_code=204)

@@ -30,7 +30,7 @@ export interface Local {
 }
 
 export const locaisService = {
-  listar: async (params?: { certame_id?: string; search?: string; cidade?: string; uf?: string }): Promise<Local[]> => {
+  listar: async (params?: { certame_id?: string; standalone?: boolean; search?: string; cidade?: string; uf?: string }): Promise<Local[]> => {
     const { data } = await api.get('/locais', { params })
     return data
   },
@@ -52,6 +52,11 @@ export const locaisService = {
 
   deletar: async (id: string): Promise<void> => {
     await api.delete(`/locais/${id}`)
+  },
+
+  atualizarCertame: async (id: string, certame_id: string | null): Promise<Local> => {
+    const { data } = await api.patch(`/locais/${id}/certame`, { certame_id })
+    return data
   },
 
   criarSala: async (local_id: string, payload: Omit<Sala, 'id' | 'local_id'>): Promise<Sala> => {

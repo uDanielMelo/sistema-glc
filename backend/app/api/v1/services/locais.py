@@ -16,6 +16,7 @@ def _recalc_local(db: Session, local_id: str) -> None:
 def listar_locais(
     db: Session,
     certame_id: str | None = None,
+    standalone: bool = False,
     search: str | None = None,
     cidade: str | None = None,
     uf: str | None = None,
@@ -23,6 +24,8 @@ def listar_locais(
     q = db.query(Local)
     if certame_id:
         q = q.filter(Local.certame_id == certame_id)
+    elif standalone:
+        q = q.filter(Local.certame_id == None)  # noqa: E711
     if search:
         q = q.filter(Local.nome.ilike(f"%{search}%"))
     if cidade:
@@ -51,6 +54,14 @@ def atualizar_local(db: Session, local_id: str, data: LocalUpdate) -> Local:
     local = buscar_local(db, local_id)
     for field, value in data.model_dump(exclude_none=True).items():
         setattr(local, field, value)
+    db.commit()
+    db.refresh(local)
+    return local
+
+
+def vincular_certame(db: Session, local_id: str, certame_id: str | None) -> Local:
+    local = buscar_local(db, local_id)
+    local.certame_id = certame_id
     db.commit()
     db.refresh(local)
     return local

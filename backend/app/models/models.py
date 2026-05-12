@@ -205,7 +205,6 @@ class Local(Base):
     certame = relationship("Certame", back_populates="locais")
     coordenador = relationship("Usuario", back_populates="locais_coordenados")
     salas = relationship("Sala", back_populates="local", cascade="all, delete-orphan")
-    fiscais = relationship("Fiscal", back_populates="local", cascade="all, delete-orphan")
     candidatos = relationship("Candidato", back_populates="local")
     ocorrencias = relationship("Ocorrencia", back_populates="local")
 
@@ -226,21 +225,33 @@ class Sala(Base):
     ocorrencias = relationship("Ocorrencia", back_populates="sala")
 
 
-# ── Equipes e Fiscais ─────────────────────────────────────────────────────────
+# ── Colaboradores (cadastro independente) ────────────────────────────────────
+
+class Coordenador(Base):
+    __tablename__ = "coordenadores"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    nome = Column(String, nullable=False)
+    cpf = Column(String)
+    celular = Column(String)
+    chave_pix = Column(String)
+    tipo_chave_pix = Column(String)  # cpf | telefone | email | aleatoria
+    banco = Column(String)
+    agencia = Column(String)
+    conta = Column(String)
+    observacoes = Column(Text)
+    criado_em = Column(DateTime, default=now)
+
 
 class Fiscal(Base):
     __tablename__ = "fiscais"
 
     id = Column(String, primary_key=True, default=gen_uuid)
-    local_id = Column(String, ForeignKey("locais.id"), nullable=False)
     nome = Column(String, nullable=False)
-    celular = Column(String)
-    observacoes = Column(Text)
-    presenca = Column(SAEnum(PresencaStatus), default=PresencaStatus.pendente)
-    observacao_coordenador = Column(Text)   # anotação do coordenador no dia
-    confirmado_em = Column(DateTime)
-
-    local = relationship("Local", back_populates="fiscais")
+    cpf = Column(String)
+    telefone = Column(String)
+    observacao = Column(Text)
+    criado_em = Column(DateTime, default=now)
 
 
 # ── Ocorrências ───────────────────────────────────────────────────────────────
