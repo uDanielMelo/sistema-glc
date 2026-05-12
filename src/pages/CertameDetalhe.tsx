@@ -4,6 +4,7 @@ import { certamesService } from '../services/certames'
 import { periodosService } from '../services/periodos'
 import { locaisService } from '../services/locais'
 import { arquivosService, type CertameArquivo } from '../services/arquivos'
+import { candidatosService, type CandidatoInfo, type LocalAplicacao, type Candidato, type PeriodoAplicacao } from '../services/candidatos'
 import type { Periodo, Cargo } from '../services/periodos'
 import type { Local } from '../services/locais'
 import type { Certame, CertameStatus, TipoProva } from '../types/index'
@@ -17,14 +18,6 @@ const statusLabel: Record<CertameStatus, string> = {
   cancelado: 'Cancelado',
 }
 
-const statusColor: Record<CertameStatus, string> = {
-  rascunho: 'bg-gray-100 text-gray-600',
-  planejamento: 'bg-blue-100 text-blue-700',
-  em_andamento: 'bg-amber-100 text-amber-700',
-  finalizado: 'bg-green-100 text-green-700',
-  concluido: 'bg-green-100 text-green-700',
-  cancelado: 'bg-red-100 text-red-600',
-}
 
 const tipoProvaLabel: Record<TipoProva, string> = {
   objetiva: 'Objetiva',
@@ -94,7 +87,7 @@ export default function CertameDetalhe() {
     try {
       const payload = {
         ...formEdit,
-        tipo_prova: formEdit.tipo_prova || undefined,
+        tipo_prova: (formEdit.tipo_prova as TipoProva) || undefined,
         data_aplicacao: formEdit.data_aplicacao || undefined,
         orgao: formEdit.orgao || undefined,
         numero_edital: formEdit.numero_edital || undefined,
@@ -421,8 +414,9 @@ export default function CertameDetalhe() {
           )
         )}
         {activeTab === 'Períodos' && <TabPeriodos certameId={id!} />}
-        {activeTab === 'Locais' && <TabLocais certameId={id!} />}
-        {activeTab !== 'Visão geral' && activeTab !== 'Períodos' && activeTab !== 'Locais' && (
+        {activeTab === 'Locais' && <TabLocaisAplicacao certameId={id!} />}
+        {activeTab === 'Candidatos' && <TabCandidatos certameId={id!} />}
+        {activeTab !== 'Visão geral' && activeTab !== 'Períodos' && activeTab !== 'Locais' && activeTab !== 'Candidatos' && (
           <p className="text-gray-400 text-sm">
             Módulo <strong>{activeTab}</strong> em desenvolvimento.
           </p>
@@ -766,6 +760,7 @@ function Row({ label, value }: { label: string; value?: string }) {
 function TabPeriodos({ certameId }: { certameId: string }) {
   const [periodos, setPeriodos] = useState<Periodo[]>([])
   const [cargos, setCargos] = useState<Cargo[]>([])
+  const [aplicacoes, setAplicacoes] = useState<PeriodoAplicacao[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -776,6 +771,7 @@ function TabPeriodos({ certameId }: { certameId: string }) {
       setPeriodos(p)
       setCargos(c)
     }).finally(() => setLoading(false))
+    candidatosService.periodos(certameId).then(setAplicacoes).catch(() => {})
   }, [certameId])
 
   if (loading) return <p className="text-gray-400 text-sm">Carregando...</p>
@@ -799,16 +795,46 @@ function TabPeriodos({ certameId }: { certameId: string }) {
         const totalDef = lista.reduce((s, c) => s + c.total_deferidos, 0)
         return (
           <div key={p.id} className="border border-gray-200 rounded-xl overflow-hidden">
-            <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full">{p.numero}º</span>
-                <span className="text-sm font-medium text-gray-900">{p.label || `Período ${p.numero}`}</span>
+            <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full">{p.numero}º</span>
+                  <span className="text-sm font-medium text-gray-900">{p.label || `Período ${p.numero}`}</span>
+                  {p.data_hora && (
+                    <span className="text-xs text-gray-400">
+                      {new Date(p.data_hora).toLocaleDateString('pt-BR')}
+                      {' · '}
+                      {new Date(p.data_hora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-gray-400">
+                  {lista.length} cargo{lista.length !== 1 ? 's' : ''}
+                  {totalInsc > 0 && ` · ${totalInsc.toLocaleString('pt-BR')} inscritos`}
+                  {totalDef > 0 && ` · ${totalDef.toLocaleString('pt-BR')} deferidos`}
+                </div>
               </div>
-              <div className="text-xs text-gray-400">
-                {lista.length} cargo{lista.length !== 1 ? 's' : ''}
-                {totalInsc > 0 && ` · ${totalInsc.toLocaleString('pt-BR')} inscritos`}
-                {totalDef > 0 && ` · ${totalDef.toLocaleString('pt-BR')} deferidos`}
-              </div>
+              {(() => {
+                const diaP = p.data_hora?.split('T')[0]
+                const apl = aplicacoes.find(a => a.dia_prova === diaP)
+                if (!apl) return null
+                return (
+                  <div className="mt-2 pt-2 border-t border-gray-200 flex flex-wrap gap-x-4 gap-y-1">
+                    <span className="text-xs text-gray-500">
+                      <span className="font-medium">{apl.total.toLocaleString('pt-BR')}</span> candidatos aplicação
+                    </span>
+                    {apl.horarios.length > 0 && (
+                      <span className="text-xs text-gray-500">Horário: <span className="font-medium">{apl.horarios.join(', ')}</span></span>
+                    )}
+                    {apl.locais.length > 0 && (
+                      <span className="text-xs text-gray-500">
+                        {apl.locais.length} local{apl.locais.length !== 1 ? 'is' : ''}:{' '}
+                        <span className="font-medium">{apl.locais.slice(0, 2).join(', ')}{apl.locais.length > 2 ? ` +${apl.locais.length - 2}` : ''}</span>
+                      </span>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
             {lista.length > 0 ? (
               <div className="divide-y divide-gray-100">
@@ -840,6 +866,369 @@ function TabPeriodos({ certameId }: { certameId: string }) {
             ))}
           </div>
         </div>
+      )}
+      {aplicacoes.length > 0 && periodos.length === 0 && (
+        <div className="space-y-2">
+          {aplicacoes.map(apl => (
+            <div key={apl.dia_prova} className="border border-gray-200 rounded-xl px-4 py-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-900">
+                    {new Date(apl.dia_prova + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
+                  </span>
+                  {apl.horarios.length > 0 && (
+                    <span className="text-xs text-gray-400">{apl.horarios.join(' / ')}</span>
+                  )}
+                </div>
+                <span className="text-xs text-gray-400">{apl.total.toLocaleString('pt-BR')} candidatos · {apl.locais.length} local{apl.locais.length !== 1 ? 'is' : ''}</span>
+              </div>
+              {apl.cargos.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {apl.cargos.map(c => (
+                    <span key={c} className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">{c}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Tab Locais Aplicação ──────────────────────────────────────────────────────
+
+function TabLocaisAplicacao({ certameId }: { certameId: string }) {
+  const [info, setInfo] = useState<CandidatoInfo | null>(null)
+  const [locais, setLocais] = useState<LocalAplicacao[]>([])
+  const [loading, setLoading] = useState(true)
+  const [localAberto, setLocalAberto] = useState<string | null>(null)
+  const [salaView, setSalaView] = useState<{ local: string; sala: string } | null>(null)
+  const [candidatosSala, setCandidatosSala] = useState<Candidato[]>([])
+  const [loadingSala, setLoadingSala] = useState(false)
+  const [editandoId, setEditandoId] = useState<string | null>(null)
+  const [novaCondicao, setNovaCondicao] = useState('')
+  const [salvando, setSalvando] = useState(false)
+
+  useEffect(() => {
+    Promise.all([
+      candidatosService.info(certameId),
+      candidatosService.locais(certameId),
+    ]).then(([i, l]) => { setInfo(i); setLocais(l) })
+      .finally(() => setLoading(false))
+  }, [certameId])
+
+  const abrirSala = async (local: string, sala: string) => {
+    setSalaView({ local, sala })
+    setLoadingSala(true)
+    setEditandoId(null)
+    try {
+      setCandidatosSala(await candidatosService.listar(certameId, { local, sala }))
+    } finally {
+      setLoadingSala(false)
+    }
+  }
+
+  const salvarCondicao = async (candidatoId: string) => {
+    setSalvando(true)
+    try {
+      const atualizado = await candidatosService.editarCondicao(certameId, candidatoId, novaCondicao || null)
+      setCandidatosSala(prev => prev.map(c => c.id === candidatoId ? atualizado : c))
+      setEditandoId(null)
+      candidatosService.locais(certameId).then(setLocais)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  if (loading) return <p className="text-gray-400 text-sm">Carregando...</p>
+
+  if (!info?.importado) {
+    return (
+      <div className="py-12 text-center">
+        <p className="text-gray-500 text-sm font-medium">Sem dados de aplicação</p>
+        <p className="text-gray-400 text-xs mt-1">Importe os candidatos na aba Candidatos para visualizar os locais.</p>
+      </div>
+    )
+  }
+
+  if (salaView) {
+    return (
+      <div>
+        <button onClick={() => setSalaView(null)} className="text-sm text-gray-400 hover:text-gray-600 mb-4 flex items-center gap-1">
+          ← {salaView.local}
+        </button>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-gray-900">{salaView.sala}</h3>
+          <span className="text-xs text-gray-400">{candidatosSala.length} candidato{candidatosSala.length !== 1 ? 's' : ''}</span>
+        </div>
+        {loadingSala ? (
+          <p className="text-gray-400 text-sm">Carregando...</p>
+        ) : (
+          <div className="border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
+            {candidatosSala.map(c => (
+              <div key={c.id} className="px-4 py-3">
+                <div className="flex items-start gap-3">
+                  <span className="text-xs text-gray-400 w-14 shrink-0 pt-0.5">{c.numero_inscricao || '—'}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800">{c.nome}</p>
+                    <p className="text-xs text-gray-400">{c.vaga || '—'}{c.cpf ? ` · ${c.cpf}` : ''}</p>
+                    {editandoId === c.id ? (
+                      <div className="mt-2 flex gap-2 items-center">
+                        <input
+                          autoFocus
+                          value={novaCondicao}
+                          onChange={e => setNovaCondicao(e.target.value)}
+                          placeholder="Descreva a condição especial..."
+                          className="flex-1 border border-amber-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400"
+                        />
+                        <button onClick={() => salvarCondicao(c.id)} disabled={salvando}
+                          className="text-xs bg-amber-500 text-white px-2 py-1 rounded-lg hover:bg-amber-600 disabled:opacity-50">
+                          {salvando ? '...' : 'Salvar'}
+                        </button>
+                        <button onClick={() => setEditandoId(null)} className="text-xs text-gray-400 hover:text-gray-600">
+                          Cancelar
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                        {c.condicao_especial && (
+                          <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">⚠ {c.condicao_especial}</span>
+                        )}
+                        <button
+                          onClick={() => { setEditandoId(c.id); setNovaCondicao(c.condicao_especial || '') }}
+                          className="text-xs text-gray-300 hover:text-indigo-500 transition-colors"
+                        >
+                          {c.condicao_especial ? 'editar condição' : '+ condição especial'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      {locais.map(local => (
+        <div key={local.local_nome} className="border border-gray-200 rounded-xl overflow-hidden">
+          <button
+            className="w-full px-4 py-3 bg-gray-50 flex items-center justify-between hover:bg-gray-100 transition-colors text-left"
+            onClick={() => setLocalAberto(v => v === local.local_nome ? null : local.local_nome)}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              {local.tem_condicao && <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" title="Contém condição especial" />}
+              <span className="text-sm font-medium text-gray-900 truncate">{local.local_nome}</span>
+            </div>
+            <div className="flex items-center gap-3 shrink-0 ml-2">
+              <span className="text-xs text-gray-400">
+                {local.total_salas} sala{local.total_salas !== 1 ? 's' : ''} · {local.total_candidatos.toLocaleString('pt-BR')} candidatos
+              </span>
+              <svg className={`w-4 h-4 text-gray-400 transition-transform ${localAberto === local.local_nome ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </button>
+          {localAberto === local.local_nome && (
+            <div className="divide-y divide-gray-100">
+              {local.salas.map(sala => (
+                <button
+                  key={sala.sala}
+                  className="w-full px-5 py-3 flex items-center justify-between hover:bg-indigo-50 transition-colors text-left"
+                  onClick={() => abrirSala(local.local_nome, sala.sala)}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    {sala.tem_condicao && <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />}
+                    <span className="text-sm text-gray-800">{sala.sala}</span>
+                    <div className="flex gap-1 flex-wrap">
+                      {sala.cargos.map(cargo => (
+                        <span key={cargo} className="text-xs bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-full">{cargo}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs text-gray-400">{sala.total} candidatos</span>
+                    <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── Tab Candidatos ────────────────────────────────────────────────────────────
+
+function TabCandidatos({ certameId }: { certameId: string }) {
+  const [info, setInfo] = useState<CandidatoInfo | null>(null)
+  const [candidatos, setCandidatos] = useState<Candidato[]>([])
+  const [loading, setLoading] = useState(true)
+  const [importando, setImportando] = useState(false)
+  const [removendo, setRemovendo] = useState(false)
+  const [busca, setBusca] = useState('')
+  const [filtroLocal, setFiltroLocal] = useState('')
+  const [locaisDisponiveis, setLocaisDisponiveis] = useState<string[]>([])
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const carregar = async () => {
+    setLoading(true)
+    try {
+      const [inf, cands, locs] = await Promise.all([
+        candidatosService.info(certameId),
+        candidatosService.listar(certameId),
+        candidatosService.locais(certameId),
+      ])
+      setInfo(inf)
+      setCandidatos(cands)
+      setLocaisDisponiveis(locs.map(l => l.local_nome))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { carregar() }, [certameId])
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImportando(true)
+    try {
+      await candidatosService.importar(certameId, file)
+      await carregar()
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      alert(msg || 'Erro ao importar arquivo')
+    } finally {
+      setImportando(false)
+      e.target.value = ''
+    }
+  }
+
+  const handleRemover = async () => {
+    if (!window.confirm('Remover todos os candidatos desta importação?')) return
+    setRemovendo(true)
+    try {
+      await candidatosService.remover(certameId)
+      await carregar()
+    } finally {
+      setRemovendo(false)
+    }
+  }
+
+  const filtrados = candidatos.filter(c => {
+    if (filtroLocal && c.local_nome !== filtroLocal) return false
+    if (busca) {
+      const b = busca.toLowerCase()
+      return c.nome.toLowerCase().includes(b) || (c.numero_inscricao || '').includes(b)
+    }
+    return true
+  })
+
+  if (loading) return <p className="text-gray-400 text-sm">Carregando...</p>
+
+  if (!info?.importado) {
+    return (
+      <div className="py-12 text-center">
+        <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <svg className="w-8 h-8 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+          </svg>
+        </div>
+        <p className="text-gray-700 font-medium mb-1">Nenhuma importação realizada</p>
+        <p className="text-gray-400 text-sm mb-2">Importe uma planilha com os candidatos do certame</p>
+        <p className="text-xs text-gray-300 mb-5">Colunas: INSCRIÇÃO · NOME · CPF · VAGA · DIA DA PROVA · HORÁRIO · LOCAL · SALA · CONDIÇÃO ESPECIAL</p>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImport} className="hidden" />
+        <button onClick={() => fileRef.current?.click()} disabled={importando}
+          className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
+          {importando ? 'Importando...' : 'Importar planilha'}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="text-sm font-semibold text-gray-800">{info.total.toLocaleString('pt-BR')} candidatos</span>
+          {info.com_condicao > 0 && (
+            <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+              {info.com_condicao} com condição especial
+            </span>
+          )}
+          {info.importado_em && (
+            <span className="text-xs text-gray-400">
+              Importado em {new Date(info.importado_em).toLocaleDateString('pt-BR')}
+            </span>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImport} className="hidden" />
+          <button onClick={() => fileRef.current?.click()} disabled={importando}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+            {importando ? 'Importando...' : 'Reimportar'}
+          </button>
+          <button onClick={handleRemover} disabled={removendo}
+            className="border border-red-200 text-red-500 rounded-lg px-3 py-1.5 text-xs hover:bg-red-50 disabled:opacity-50">
+            {removendo ? 'Removendo...' : 'Remover importação'}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex gap-2 mb-4 flex-wrap">
+        <input
+          value={busca}
+          onChange={e => setBusca(e.target.value)}
+          placeholder="Buscar por nome ou inscrição..."
+          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 flex-1 min-w-48"
+        />
+        {locaisDisponiveis.length > 1 && (
+          <select value={filtroLocal} onChange={e => setFiltroLocal(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="">Todos os locais</option>
+            {locaisDisponiveis.map(l => <option key={l} value={l}>{l}</option>)}
+          </select>
+        )}
+      </div>
+
+      <p className="text-xs text-gray-400 mb-2">{filtrados.length.toLocaleString('pt-BR')} resultado{filtrados.length !== 1 ? 's' : ''}</p>
+      <div className="border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
+        {filtrados.length === 0 ? (
+          <p className="py-8 text-center text-gray-400 text-sm">Nenhum candidato encontrado.</p>
+        ) : filtrados.slice(0, 200).map(c => (
+          <div key={c.id} className="px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50">
+            <span className="text-xs text-gray-400 w-14 shrink-0">{c.numero_inscricao || '—'}</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-800 truncate">{c.nome}</p>
+              <p className="text-xs text-gray-400">
+                {c.vaga || ''}
+                {c.sala ? ` · ${c.sala}` : ''}
+                {c.dia_prova ? ` · ${new Date(c.dia_prova + 'T00:00:00').toLocaleDateString('pt-BR')}` : ''}
+              </p>
+            </div>
+            {c.condicao_especial && (
+              <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full shrink-0 max-w-[160px] truncate" title={c.condicao_especial}>
+                ⚠ {c.condicao_especial}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+      {filtrados.length > 200 && (
+        <p className="text-xs text-gray-400 mt-2 text-center">
+          Mostrando 200 de {filtrados.length.toLocaleString('pt-BR')}. Use os filtros para refinar.
+        </p>
       )}
     </div>
   )

@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx --prefix /c/Users/Base1/sistema-glc tsc --noEmit -p /c/Users/Base1/sistema-glc/tsconfig.json)"
+    ]
+  }
+}

@@ -6,7 +6,7 @@ tenant_id presente em todas as entidades principais.
 import uuid
 from datetime import datetime
 from sqlalchemy import (
-    Column, String, Integer, Boolean, DateTime, Text,
+    Column, String, Integer, Boolean, DateTime, Text, Date,
     ForeignKey, Enum as SAEnum, JSON
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -145,6 +145,7 @@ class Certame(Base):
     importacoes = relationship("Importacao", back_populates="certame", cascade="all, delete-orphan")
     colaboradores = relationship("CertameColaborador", back_populates="certame", cascade="all, delete-orphan")
     arquivos = relationship("CertameArquivo", back_populates="certame", cascade="all, delete-orphan")
+    candidatos = relationship("CandidatoCertame", back_populates="certame", cascade="all, delete-orphan")
 
 
 class CertameArquivo(Base):
@@ -160,6 +161,25 @@ class CertameArquivo(Base):
     criado_em = Column(DateTime, default=now)
 
     certame = relationship("Certame", back_populates="arquivos")
+
+
+class CandidatoCertame(Base):
+    __tablename__ = "candidatos_certame"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    certame_id = Column(String, ForeignKey("certames.id", ondelete="CASCADE"), nullable=False)
+    numero_inscricao = Column(String)
+    nome = Column(String, nullable=False)
+    cpf = Column(String)
+    vaga = Column(String)
+    dia_prova = Column(Date)
+    horario = Column(String(10))
+    local_nome = Column(String)
+    sala = Column(String)
+    condicao_especial = Column(Text)
+    importado_em = Column(DateTime, default=now)
+
+    certame = relationship("Certame", back_populates="candidatos")
 
 
 # ── Períodos e Cargos ─────────────────────────────────────────────────────────
