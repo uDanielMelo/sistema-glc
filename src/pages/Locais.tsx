@@ -204,6 +204,7 @@ function LocalDetalhe({ local, onVoltar, onAtualizar, onDeletar }: {
   const [form, setForm] = useState({
     nome: local.nome,
     codigo: local.codigo || '',
+    numero_recinto: local.numero_recinto || '',
     endereco: local.endereco || '',
     bairro: local.bairro || '',
     cidade: local.cidade || '',
@@ -266,6 +267,11 @@ function LocalDetalhe({ local, onVoltar, onAtualizar, onDeletar }: {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             </div>
             <div>
+              <label className="block text-xs text-gray-500 mb-1">Nº do Recinto</label>
+              <input value={form.numero_recinto} onChange={e => setForm({ ...form, numero_recinto: e.target.value })}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <div>
               <label className="block text-xs text-gray-500 mb-1">CEP {buscandoCep && <span className="text-indigo-400">(buscando...)</span>}</label>
               <input value={form.cep} onChange={e => handleCepChange(e.target.value)} maxLength={9}
                 placeholder="00000-000"
@@ -315,6 +321,7 @@ function LocalDetalhe({ local, onVoltar, onAtualizar, onDeletar }: {
             {([
               ['Nome', local.nome],
               ['Código', local.codigo],
+              ['Nº do Recinto', local.numero_recinto],
               ['CEP', local.cep],
               ['Endereço', local.endereco],
               ['Bairro', local.bairro],
@@ -344,6 +351,7 @@ function NovoLocalModal({ onClose, onCreated }: {
   const [form, setForm] = useState({
     nome: '',
     codigo: '',
+    numero_recinto: '',
     cep: '',
     endereco: '',
     bairro: '',
@@ -387,9 +395,14 @@ function NovoLocalModal({ onClose, onCreated }: {
           <input required placeholder="Nome do local *"
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} />
-          <input placeholder="Código"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            value={form.codigo} onChange={e => setForm({ ...form, codigo: e.target.value })} />
+          <div className="grid grid-cols-2 gap-3">
+            <input placeholder="Código"
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              value={form.codigo} onChange={e => setForm({ ...form, codigo: e.target.value })} />
+            <input placeholder="Nº do Recinto"
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              value={form.numero_recinto} onChange={e => setForm({ ...form, numero_recinto: e.target.value })} />
+          </div>
 
           <div>
             <label className="block text-xs text-gray-500 mb-1">CEP {buscandoCep && <span className="text-indigo-400">(buscando...)</span>}</label>

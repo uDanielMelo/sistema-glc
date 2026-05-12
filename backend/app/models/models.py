@@ -146,6 +146,7 @@ class Certame(Base):
     colaboradores = relationship("CertameColaborador", back_populates="certame", cascade="all, delete-orphan")
     arquivos = relationship("CertameArquivo", back_populates="certame", cascade="all, delete-orphan")
     candidatos = relationship("CandidatoCertame", back_populates="certame", cascade="all, delete-orphan")
+    locais_info = relationship("LocalAplicacaoInfo", back_populates="certame", cascade="all, delete-orphan")
 
 
 class CertameArquivo(Base):
@@ -180,6 +181,18 @@ class CandidatoCertame(Base):
     importado_em = Column(DateTime, default=now)
 
     certame = relationship("Certame", back_populates="candidatos")
+
+
+class LocalAplicacaoInfo(Base):
+    __tablename__ = "local_aplicacao_info"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    certame_id = Column(String, ForeignKey("certames.id", ondelete="CASCADE"), nullable=False)
+    local_nome = Column(String, nullable=False)
+    responsaveis = Column(JSON, default=list)
+    colaboradores_ids = Column(JSON, default=list)
+
+    certame = relationship("Certame", back_populates="locais_info")
 
 
 # ── Períodos e Cargos ─────────────────────────────────────────────────────────
@@ -246,6 +259,7 @@ class Local(Base):
     coordenador_id = Column(String, ForeignKey("usuarios.id"), nullable=True)
     nome = Column(String, nullable=False)
     codigo = Column(String)
+    numero_recinto = Column(String)
     endereco = Column(String)
     bairro = Column(String)
     cidade = Column(String)
@@ -255,6 +269,8 @@ class Local(Base):
     capacidade_total = Column(Integer, default=0)
     acessivel = Column(Boolean, default=False)
     observacoes = Column(Text)
+    responsavel_nome = Column(String)
+    responsavel_contato = Column(String)
 
     certame = relationship("Certame", back_populates="locais")
     coordenador = relationship("Usuario", back_populates="locais_coordenados")

@@ -52,7 +52,7 @@ def criar_local(db: Session, data: LocalCreate) -> Local:
 
 def atualizar_local(db: Session, local_id: str, data: LocalUpdate) -> Local:
     local = buscar_local(db, local_id)
-    for field, value in data.model_dump(exclude_none=True).items():
+    for field, value in data.model_dump(exclude_unset=True).items():
         setattr(local, field, value)
     db.commit()
     db.refresh(local)

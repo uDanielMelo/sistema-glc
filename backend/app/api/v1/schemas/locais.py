@@ -6,6 +6,7 @@ class LocalCreate(BaseModel):
     certame_id: Optional[str] = None
     nome: str
     codigo: Optional[str] = None
+    numero_recinto: Optional[str] = None
     endereco: Optional[str] = None
     bairro: Optional[str] = None
     cidade: Optional[str] = None
@@ -20,6 +21,7 @@ class LocalCreate(BaseModel):
 class LocalUpdate(BaseModel):
     nome: Optional[str] = None
     codigo: Optional[str] = None
+    numero_recinto: Optional[str] = None
     endereco: Optional[str] = None
     bairro: Optional[str] = None
     cidade: Optional[str] = None
@@ -30,6 +32,8 @@ class LocalUpdate(BaseModel):
     acessivel: Optional[bool] = None
     observacoes: Optional[str] = None
     coordenador_id: Optional[str] = None
+    responsavel_nome: Optional[str] = None
+    responsavel_contato: Optional[str] = None
 
 
 class VincularCertameSchema(BaseModel):
@@ -82,6 +86,7 @@ class LocalResponse(BaseModel):
     certame_id: Optional[str] = None
     nome: str
     codigo: Optional[str] = None
+    numero_recinto: Optional[str] = None
     endereco: Optional[str] = None
     bairro: Optional[str] = None
     cidade: Optional[str] = None
@@ -92,6 +97,8 @@ class LocalResponse(BaseModel):
     acessivel: bool
     observacoes: Optional[str] = None
     coordenador_id: Optional[str] = None
+    responsavel_nome: Optional[str] = None
+    responsavel_contato: Optional[str] = None
     salas: list[SalaResponse] = []
 
     class Config:

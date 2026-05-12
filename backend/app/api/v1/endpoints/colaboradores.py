@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.core.deps import require_logistica, get_current_colaborador
-from app.models.models import Coordenador, Usuario
+from app.models.models import Coordenador, CertameColaborador, Usuario
 from app.api.v1.schemas.colaboradores import (
     ColaboradorPreCadastro, ColaboradorCompletarCadastro, ColaboradorLogin,
     ColaboradorTokenResponse, ConviteInfo, ColaboradorAdminResponse,
@@ -145,6 +145,31 @@ def post_vincular_certame(
         orgao=v.certame.orgao,
         funcao=v.funcao,
     )
+
+
+@router.get("/certames/{certame_id}/equipe", tags=["colaboradores"])
+def get_equipe_certame(
+    certame_id: str,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_logistica),
+):
+    vinculos = db.query(CertameColaborador).filter(
+        CertameColaborador.certame_id == certame_id
+    ).all()
+    return [
+        {
+            "id": v.id,
+            "certame_id": v.certame_id,
+            "colaborador_id": v.coordenador_id,
+            "funcao": v.funcao,
+            "nome": v.colaborador.nome,
+            "cpf": v.colaborador.cpf,
+            "celular": v.colaborador.celular,
+            "email": v.colaborador.email,
+            "status": v.colaborador.status.value,
+        }
+        for v in vinculos
+    ]
 
 
 @router.delete("/colaboradores/{colab_id}/certames/{certame_id}", status_code=204, tags=["colaboradores"])

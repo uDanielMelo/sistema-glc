@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from app.db.session import get_db
 from app.core.deps import get_current_user, require_logistica
-from app.models.models import CandidatoCertame, Certame, Usuario
+from app.models.models import CandidatoCertame, Certame, LocalAplicacaoInfo, Usuario
 
 router = APIRouter()
 
@@ -180,38 +180,60 @@ def locais_aplicacao(
         CandidatoCertame.certame_id == certame_id
     ).order_by(CandidatoCertame.local_nome, CandidatoCertame.sala, CandidatoCertame.numero_inscricao).all()
 
-    # group local -> sala -> candidatos
-    locais_dict: dict = defaultdict(lambda: defaultdict(list))
+    # group local -> (dia_prova, horario) -> sala -> candidatos
+    locais_dict: dict = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     for c in todos:
         local = c.local_nome or '(sem local)'
+        periodo = (str(c.dia_prova) if c.dia_prova else None, c.horario)
         sala = c.sala or '(sem sala)'
-        locais_dict[local][sala].append(c)
+        locais_dict[local][periodo][sala].append(c)
 
     result = []
     for local_nome in sorted(locais_dict.keys()):
-        salas_data = locais_dict[local_nome]
-        salas_list = []
+        periodos_data = locais_dict[local_nome]
+        periodos_list = []
         total_local = 0
         tem_condicao_local = False
-        for sala_nome in sorted(salas_data.keys()):
-            cands = salas_data[sala_nome]
-            tem_condicao_sala = any(c.condicao_especial for c in cands)
-            cargos = sorted({c.vaga for c in cands if c.vaga})
-            salas_list.append({
-                "sala": sala_nome,
-                "total": len(cands),
-                "cargos": cargos,
-                "tem_condicao": tem_condicao_sala,
+        salas_unicas: set = set()
+
+        for (dia, horario) in sorted(periodos_data.keys(), key=lambda k: (k[0] or '', k[1] or '')):
+            salas_data = periodos_data[(dia, horario)]
+            salas_list = []
+            total_periodo = 0
+            tem_condicao_periodo = False
+
+            for sala_nome in sorted(salas_data.keys()):
+                cands = salas_data[sala_nome]
+                tem_condicao_sala = any(c.condicao_especial for c in cands)
+                cargos = sorted({c.vaga for c in cands if c.vaga})
+                salas_list.append({
+                    "sala": sala_nome,
+                    "total": len(cands),
+                    "cargos": cargos,
+                    "tem_condicao": tem_condicao_sala,
+                })
+                total_periodo += len(cands)
+                salas_unicas.add(sala_nome)
+                if tem_condicao_sala:
+                    tem_condicao_periodo = True
+
+            periodos_list.append({
+                "dia_prova": dia,
+                "horario": horario,
+                "total": total_periodo,
+                "tem_condicao": tem_condicao_periodo,
+                "salas": salas_list,
             })
-            total_local += len(cands)
-            if tem_condicao_sala:
+            total_local += total_periodo
+            if tem_condicao_periodo:
                 tem_condicao_local = True
+
         result.append({
             "local_nome": local_nome,
-            "total_salas": len(salas_list),
+            "total_salas": len(salas_unicas),
             "total_candidatos": total_local,
             "tem_condicao": tem_condicao_local,
-            "salas": salas_list,
+            "periodos": periodos_list,
         })
     return result
 
@@ -286,6 +308,18 @@ class EditarCandidato(BaseModel):
     condicao_especial: Optional[str] = None
 
 
+class ResponsavelSchema(BaseModel):
+    nome: str = ''
+    contato: str = ''
+    obs: str = ''
+
+
+class LocalInfoUpsert(BaseModel):
+    local_nome: str
+    responsaveis: list[ResponsavelSchema] = []
+    colaboradores_ids: list[str] = []
+
+
 @router.patch("/{certame_id}/candidatos/{candidato_id}")
 def editar(
     certame_id: str,
@@ -304,6 +338,55 @@ def editar(
     c.condicao_especial = data.condicao_especial.strip() if data.condicao_especial else None
     db.commit()
     return _to_dict(c)
+
+
+@router.get("/{certame_id}/locais-info")
+def listar_locais_info(
+    certame_id: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    _get_certame(db, certame_id, current_user.tenant_id)
+    return [
+        {
+            "local_nome": li.local_nome,
+            "responsaveis": li.responsaveis or [],
+            "colaboradores_ids": li.colaboradores_ids or [],
+        }
+        for li in db.query(LocalAplicacaoInfo).filter(
+            LocalAplicacaoInfo.certame_id == certame_id
+        ).all()
+    ]
+
+
+@router.post("/{certame_id}/locais-info")
+def salvar_local_info(
+    certame_id: str,
+    data: LocalInfoUpsert,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_logistica),
+):
+    _get_certame(db, certame_id, current_user.tenant_id)
+    li = db.query(LocalAplicacaoInfo).filter(
+        LocalAplicacaoInfo.certame_id == certame_id,
+        LocalAplicacaoInfo.local_nome == data.local_nome,
+    ).first()
+    responsaveis = [r.model_dump() for r in data.responsaveis]
+    colaboradores_ids = data.colaboradores_ids
+    if li:
+        li.responsaveis = responsaveis
+        li.colaboradores_ids = colaboradores_ids
+    else:
+        li = LocalAplicacaoInfo(
+            certame_id=certame_id,
+            local_nome=data.local_nome,
+            responsaveis=responsaveis,
+            colaboradores_ids=colaboradores_ids,
+        )
+        db.add(li)
+    db.commit()
+    db.refresh(li)
+    return {"local_nome": li.local_nome, "responsaveis": li.responsaveis or [], "colaboradores_ids": li.colaboradores_ids or []}
 
 
 @router.delete("/{certame_id}/candidatos", status_code=204)

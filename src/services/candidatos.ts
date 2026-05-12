@@ -14,12 +14,20 @@ export interface SalaInfo {
   tem_condicao: boolean
 }
 
+export interface PeriodoLocal {
+  dia_prova: string | null
+  horario: string | null
+  total: number
+  tem_condicao: boolean
+  salas: SalaInfo[]
+}
+
 export interface LocalAplicacao {
   local_nome: string
   total_salas: number
   total_candidatos: number
   tem_condicao: boolean
-  salas: SalaInfo[]
+  periodos: PeriodoLocal[]
 }
 
 export interface PeriodoAplicacao {
@@ -41,6 +49,18 @@ export interface Candidato {
   local_nome?: string | null
   sala?: string | null
   condicao_especial?: string | null
+}
+
+export interface Responsavel {
+  nome: string
+  contato: string
+  obs?: string
+}
+
+export interface LocalInfo {
+  local_nome: string
+  responsaveis: Responsavel[]
+  colaboradores_ids: string[]
 }
 
 export const candidatosService = {
@@ -85,5 +105,15 @@ export const candidatosService = {
 
   remover: async (certameId: string): Promise<void> => {
     await api.delete(`/certames/${certameId}/candidatos`)
+  },
+
+  locaisInfo: async (certameId: string): Promise<LocalInfo[]> => {
+    const { data } = await api.get(`/certames/${certameId}/locais-info`)
+    return data
+  },
+
+  salvarLocalInfo: async (certameId: string, localNome: string, responsaveis: Responsavel[], colaboradoresIds?: string[]): Promise<LocalInfo> => {
+    const { data } = await api.post(`/certames/${certameId}/locais-info`, { local_nome: localNome, responsaveis, colaboradores_ids: colaboradoresIds ?? [] })
+    return data
   },
 }

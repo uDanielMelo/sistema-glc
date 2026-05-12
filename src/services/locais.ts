@@ -16,6 +16,7 @@ export interface Local {
   certame_id?: string | null
   nome: string
   codigo?: string
+  numero_recinto?: string
   endereco?: string
   bairro?: string
   cidade?: string
@@ -26,6 +27,8 @@ export interface Local {
   acessivel: boolean
   observacoes?: string
   coordenador_id?: string
+  responsavel_nome?: string
+  responsavel_contato?: string
   salas: Sala[]
 }
 

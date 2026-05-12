@@ -4,7 +4,8 @@ import { certamesService } from '../services/certames'
 import { periodosService } from '../services/periodos'
 import { locaisService } from '../services/locais'
 import { arquivosService, type CertameArquivo } from '../services/arquivos'
-import { candidatosService, type CandidatoInfo, type LocalAplicacao, type Candidato, type PeriodoAplicacao } from '../services/candidatos'
+import { candidatosService, type CandidatoInfo, type LocalAplicacao, type PeriodoLocal, type Candidato, type PeriodoAplicacao, type LocalInfo, type Responsavel } from '../services/candidatos'
+import { colaboradoresAdminService, certameEquipeService, type ColaboradorAdmin, type MembroEquipe } from '../services/colaboradores'
 import type { Periodo, Cargo } from '../services/periodos'
 import type { Local } from '../services/locais'
 import type { Certame, CertameStatus, TipoProva } from '../types/index'
@@ -416,7 +417,8 @@ export default function CertameDetalhe() {
         {activeTab === 'Períodos' && <TabPeriodos certameId={id!} />}
         {activeTab === 'Locais' && <TabLocaisAplicacao certameId={id!} />}
         {activeTab === 'Candidatos' && <TabCandidatos certameId={id!} />}
-        {activeTab !== 'Visão geral' && activeTab !== 'Períodos' && activeTab !== 'Locais' && activeTab !== 'Candidatos' && (
+        {activeTab === 'Equipes' && <TabEquipes certameId={id!} />}
+        {activeTab !== 'Visão geral' && activeTab !== 'Períodos' && activeTab !== 'Locais' && activeTab !== 'Candidatos' && activeTab !== 'Equipes' && (
           <p className="text-gray-400 text-sm">
             Módulo <strong>{activeTab}</strong> em desenvolvimento.
           </p>
@@ -441,10 +443,19 @@ async function buscarCep(cep: string): Promise<Partial<{ endereco: string; bairr
   }
 }
 
+
 function TabLocais({ certameId }: { certameId: string }) {
   const [locais, setLocais] = useState<Local[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [editandoLocal, setEditandoLocal] = useState<string | null>(null)
+  const [formLocal, setFormLocal] = useState({
+    nome: '', codigo: '', numero_recinto: '', cep: '', endereco: '', bairro: '', cidade: '', uf: '',
+    acessivel: false, observacoes: '', responsavel_nome: '', responsavel_contato: '',
+  })
+  const [salvandoLocal, setSalvandoLocal] = useState(false)
+  const [buscandoCepLocal, setBuscandoCepLocal] = useState(false)
+  const [equipe, setEquipe] = useState<MembroEquipe[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
 
   const carregar = () => {
@@ -452,7 +463,63 @@ function TabLocais({ certameId }: { certameId: string }) {
     locaisService.listar({ certame_id: certameId }).then(setLocais).finally(() => setLoading(false))
   }
 
-  useEffect(() => { carregar() }, [certameId])
+  useEffect(() => {
+    carregar()
+    certameEquipeService.listar(certameId).then(setEquipe).catch(() => {})
+  }, [certameId])
+
+  const abrirEdicaoLocal = (l: Local) => {
+    setFormLocal({
+      nome: l.nome,
+      codigo: l.codigo || '',
+      numero_recinto: l.numero_recinto || '',
+      cep: l.cep || '',
+      endereco: l.endereco || '',
+      bairro: l.bairro || '',
+      cidade: l.cidade || '',
+      uf: l.uf || '',
+      acessivel: l.acessivel,
+      observacoes: l.observacoes || '',
+      responsavel_nome: l.responsavel_nome || '',
+      responsavel_contato: l.responsavel_contato || '',
+    })
+    setEditandoLocal(l.id)
+  }
+
+  const handleCepLocalChange = async (cep: string) => {
+    setFormLocal(f => ({ ...f, cep }))
+    const limpo = cep.replace(/\D/g, '')
+    if (limpo.length === 8) {
+      setBuscandoCepLocal(true)
+      const dados = await buscarCep(limpo)
+      setBuscandoCepLocal(false)
+      if (Object.keys(dados).length) setFormLocal(f => ({ ...f, ...dados }))
+    }
+  }
+
+  const salvarLocal = async (localId: string) => {
+    setSalvandoLocal(true)
+    try {
+      const atualizado = await locaisService.atualizar(localId, {
+        nome: formLocal.nome || undefined,
+        codigo: formLocal.codigo || null,
+        numero_recinto: formLocal.numero_recinto || null,
+        cep: formLocal.cep || null,
+        endereco: formLocal.endereco || null,
+        bairro: formLocal.bairro || null,
+        cidade: formLocal.cidade || null,
+        uf: formLocal.uf || null,
+        acessivel: formLocal.acessivel,
+        observacoes: formLocal.observacoes || null,
+        responsavel_nome: formLocal.responsavel_nome || null,
+        responsavel_contato: formLocal.responsavel_contato || null,
+      })
+      setLocais(prev => prev.map(l => l.id === localId ? atualizado : l))
+      setEditandoLocal(null)
+    } finally {
+      setSalvandoLocal(false)
+    }
+  }
 
   const desassociar = async (localId: string) => {
     if (!window.confirm('Remover este local do certame?')) return
@@ -512,31 +579,208 @@ function TabLocais({ certameId }: { certameId: string }) {
       {locais.length > 0 && (
         <div className="space-y-2">
           {locais.map(l => (
-            <div key={l.id} className="border border-gray-200 rounded-xl px-4 py-3 flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-gray-900 text-sm">{l.nome}</span>
-                  {l.codigo && (
-                    <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{l.codigo}</span>
-                  )}
-                  {l.acessivel && (
-                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Acessível</span>
+            <div key={l.id} className="border border-gray-200 rounded-xl overflow-hidden">
+              <div className="px-4 py-3 flex items-center justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-gray-900 text-sm">{l.nome}</span>
+                    {l.codigo && (
+                      <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{l.codigo}</span>
+                    )}
+                    {l.numero_recinto && (
+                      <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">Recinto {l.numero_recinto}</span>
+                    )}
+                    {l.acessivel && (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Acessível</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-400 mt-0.5 flex gap-3 flex-wrap">
+                    {l.endereco && <span>{l.endereco}</span>}
+                    {l.cidade && <span>{l.cidade}{l.uf ? `/${l.uf}` : ''}</span>}
+                    {l.cep && <span>CEP {l.cep}</span>}
+                    {l.total_salas > 0 && <span>{l.total_salas} sala{l.total_salas !== 1 ? 's' : ''}</span>}
+                    {l.capacidade_total > 0 && <span>{l.capacidade_total.toLocaleString('pt-BR')} vagas</span>}
+                  </div>
+                  {(l.responsavel_nome || l.responsavel_contato) && (
+                    <div className="text-xs text-indigo-600 mt-0.5 flex gap-2">
+                      {l.responsavel_nome && <span>Responsável: {l.responsavel_nome}</span>}
+                      {l.responsavel_contato && <span>· {l.responsavel_contato}</span>}
+                    </div>
                   )}
                 </div>
-                <div className="text-xs text-gray-400 mt-0.5 flex gap-3 flex-wrap">
-                  {l.endereco && <span>{l.endereco}</span>}
-                  {l.cidade && <span>{l.cidade}{l.uf ? `/${l.uf}` : ''}</span>}
-                  {l.cep && <span>CEP {l.cep}</span>}
-                  {l.total_salas > 0 && <span>{l.total_salas} sala{l.total_salas !== 1 ? 's' : ''}</span>}
-                  {l.capacidade_total > 0 && <span>{l.capacidade_total.toLocaleString('pt-BR')} vagas</span>}
+                <div className="flex items-center gap-3 ml-4 shrink-0">
+                  <button
+                    onClick={() => editandoLocal === l.id ? setEditandoLocal(null) : abrirEdicaoLocal(l)}
+                    className="text-gray-300 hover:text-indigo-500 transition-colors"
+                    title="Editar"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => desassociar(l.id)}
+                    className="text-gray-300 hover:text-red-400 transition-colors text-xs"
+                  >
+                    Remover
+                  </button>
                 </div>
               </div>
-              <button
-                onClick={() => desassociar(l.id)}
-                className="text-gray-300 hover:text-red-400 text-xs ml-4 transition-colors shrink-0"
-              >
-                Remover
-              </button>
+
+              {editandoLocal === l.id && (
+                <div className="px-4 py-4 border-t border-gray-100 bg-gray-50 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Nome *</label>
+                      <input
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        value={formLocal.nome}
+                        onChange={e => setFormLocal(f => ({ ...f, nome: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Código</label>
+                      <input
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        value={formLocal.codigo}
+                        onChange={e => setFormLocal(f => ({ ...f, codigo: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Nº do Recinto</label>
+                      <input
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        value={formLocal.numero_recinto}
+                        onChange={e => setFormLocal(f => ({ ...f, numero_recinto: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        CEP {buscandoCepLocal && <span className="text-indigo-400">(buscando...)</span>}
+                      </label>
+                      <input
+                        placeholder="00000-000"
+                        maxLength={9}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        value={formLocal.cep}
+                        onChange={e => handleCepLocalChange(e.target.value)}
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs text-gray-500 mb-1">Endereço</label>
+                      <input
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        value={formLocal.endereco}
+                        onChange={e => setFormLocal(f => ({ ...f, endereco: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Bairro</label>
+                      <input
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        value={formLocal.bairro}
+                        onChange={e => setFormLocal(f => ({ ...f, bairro: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Cidade</label>
+                      <input
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        value={formLocal.cidade}
+                        onChange={e => setFormLocal(f => ({ ...f, cidade: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">UF</label>
+                      <select
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        value={formLocal.uf}
+                        onChange={e => setFormLocal(f => ({ ...f, uf: e.target.value }))}
+                      >
+                        <option value="">UF</option>
+                        {UFS.map(uf => <option key={uf} value={uf}>{uf}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2 pt-5">
+                      <input
+                        type="checkbox"
+                        id={`acess-${l.id}`}
+                        checked={formLocal.acessivel}
+                        onChange={e => setFormLocal(f => ({ ...f, acessivel: e.target.checked }))}
+                        className="rounded"
+                      />
+                      <label htmlFor={`acess-${l.id}`} className="text-sm text-gray-700">Acessível</label>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-gray-200 pt-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-medium text-gray-600">Responsável pelo local</p>
+                      {equipe.length > 0 && (
+                        <select
+                          className="border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          defaultValue=""
+                          onChange={e => {
+                            const membro = equipe.find(m => m.colaborador_id === e.target.value)
+                            if (membro) setFormLocal(f => ({ ...f, responsavel_nome: membro.nome, responsavel_contato: membro.celular || '' }))
+                          }}
+                        >
+                          <option value="">Selecionar da equipe...</option>
+                          {equipe.map(m => (
+                            <option key={m.colaborador_id} value={m.colaborador_id}>{m.nome}{m.funcao ? ` — ${m.funcao}` : ''}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Nome</label>
+                        <input
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          placeholder="Nome do responsável"
+                          value={formLocal.responsavel_nome}
+                          onChange={e => setFormLocal(f => ({ ...f, responsavel_nome: e.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Contato</label>
+                        <input
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          placeholder="Telefone / e-mail"
+                          value={formLocal.responsavel_contato}
+                          onChange={e => setFormLocal(f => ({ ...f, responsavel_contato: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Observações</label>
+                    <textarea
+                      rows={2}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                      value={formLocal.observacoes}
+                      onChange={e => setFormLocal(f => ({ ...f, observacoes: e.target.value }))}
+                    />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setEditandoLocal(null)}
+                      className="flex-1 border border-gray-300 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-100"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={() => salvarLocal(l.id)}
+                      disabled={salvandoLocal || !formLocal.nome.trim()}
+                      className="flex-1 bg-indigo-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      {salvandoLocal ? 'Salvando...' : 'Salvar'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -567,7 +811,7 @@ function AdicionarLocalModal({ certameId, jaAdicionados, onClose, onAdded }: {
   const [vinculando, setVinculando] = useState<string | null>(null)
 
   const [form, setForm] = useState({
-    nome: '', codigo: '', cep: '', endereco: '', bairro: '', cidade: '', uf: '',
+    nome: '', codigo: '', numero_recinto: '', cep: '', endereco: '', bairro: '', cidade: '', uf: '',
     acessivel: false, observacoes: '',
   })
   const [criando, setCriando] = useState(false)
@@ -693,9 +937,14 @@ function AdicionarLocalModal({ certameId, jaAdicionados, onClose, onAdded }: {
               <input required placeholder="Nome do local *"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} />
-              <input placeholder="Código"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                value={form.codigo} onChange={e => setForm({ ...form, codigo: e.target.value })} />
+              <div className="grid grid-cols-2 gap-3">
+                <input placeholder="Código"
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  value={form.codigo} onChange={e => setForm({ ...form, codigo: e.target.value })} />
+                <input placeholder="Nº do Recinto"
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  value={form.numero_recinto} onChange={e => setForm({ ...form, numero_recinto: e.target.value })} />
+              </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">
                   CEP {buscandoCep && <span className="text-indigo-400">(buscando...)</span>}
@@ -899,12 +1148,44 @@ function TabPeriodos({ certameId }: { certameId: string }) {
 
 // ── Tab Locais Aplicação ──────────────────────────────────────────────────────
 
+function _labelPeriodo(p: PeriodoLocal, idx: number): string {
+  const parts: string[] = []
+  if (p.dia_prova) parts.push(new Date(p.dia_prova + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }))
+  if (p.horario) parts.push(p.horario)
+  return parts.join(' · ') || `Período ${idx + 1}`
+}
+
+function _textoResponsavel(r: Responsavel): string {
+  return [r.nome, r.contato, r.obs].filter(Boolean).join(' · ')
+}
+
 function TabLocaisAplicacao({ certameId }: { certameId: string }) {
   const [info, setInfo] = useState<CandidatoInfo | null>(null)
   const [locais, setLocais] = useState<LocalAplicacao[]>([])
+  const [locaisInfo, setLocaisInfo] = useState<LocalInfo[]>([])
+  const [locaisReais, setLocaisReais] = useState<Local[]>([])
+  const [equipe, setEquipe] = useState<MembroEquipe[]>([])
   const [loading, setLoading] = useState(true)
   const [localAberto, setLocalAberto] = useState<string | null>(null)
-  const [salaView, setSalaView] = useState<{ local: string; sala: string } | null>(null)
+  const [periodoAberto, setPeriodoAberto] = useState<string | null>(null)
+
+  // address edit
+  const [editandoEndereco, setEditandoEndereco] = useState<string | null>(null)
+  const [formEndereco, setFormEndereco] = useState({ nome: '', numero_recinto: '', cep: '', endereco: '', bairro: '', cidade: '', uf: '' })
+  const [salvandoEndereco, setSalvandoEndereco] = useState(false)
+  const [buscandoCepApl, setBuscandoCepApl] = useState(false)
+
+  // responsáveis edit
+  const [editandoResponsaveis, setEditandoResponsaveis] = useState<string | null>(null)
+  const [editResponsaveis, setEditResponsaveis] = useState<Responsavel[]>([])
+  const [salvandoResp, setSalvandoResp] = useState(false)
+
+  // colaboradores edit
+  const [editandoColabs, setEditandoColabs] = useState<string | null>(null)
+  const [editColabIds, setEditColabIds] = useState<string[]>([])
+  const [salvandoColabs, setSalvandoColabs] = useState(false)
+
+  const [salaView, setSalaView] = useState<{ local: string; sala: string; dia_prova: string | null; horario: string | null } | null>(null)
   const [candidatosSala, setCandidatosSala] = useState<Candidato[]>([])
   const [loadingSala, setLoadingSala] = useState(false)
   const [editandoId, setEditandoId] = useState<string | null>(null)
@@ -915,16 +1196,134 @@ function TabLocaisAplicacao({ certameId }: { certameId: string }) {
     Promise.all([
       candidatosService.info(certameId),
       candidatosService.locais(certameId),
-    ]).then(([i, l]) => { setInfo(i); setLocais(l) })
+      candidatosService.locaisInfo(certameId),
+      certameEquipeService.listar(certameId),
+      locaisService.listar({ certame_id: certameId }),
+    ]).then(([i, l, li, eq, lr]) => { setInfo(i); setLocais(l); setLocaisInfo(li); setEquipe(eq); setLocaisReais(lr) })
       .finally(() => setLoading(false))
   }, [certameId])
 
-  const abrirSala = async (local: string, sala: string) => {
-    setSalaView({ local, sala })
+  const abrirEditEndereco = (localNome: string) => {
+    const lr = locaisReais.find(x => x.nome === localNome)
+    setFormEndereco({
+      nome: lr?.nome || localNome,
+      numero_recinto: lr?.numero_recinto || '',
+      cep: lr?.cep || '',
+      endereco: lr?.endereco || '',
+      bairro: lr?.bairro || '',
+      cidade: lr?.cidade || '',
+      uf: lr?.uf || '',
+    })
+    setEditandoEndereco(localNome)
+    setEditandoResponsaveis(null)
+    setEditandoColabs(null)
+  }
+
+  const handleCepAplChange = async (cep: string) => {
+    setFormEndereco(f => ({ ...f, cep }))
+    const limpo = cep.replace(/\D/g, '')
+    if (limpo.length === 8) {
+      setBuscandoCepApl(true)
+      const dados = await buscarCep(limpo)
+      setBuscandoCepApl(false)
+      if (Object.keys(dados).length) setFormEndereco(f => ({ ...f, ...dados }))
+    }
+  }
+
+  const salvarEndereco = async (localNome: string) => {
+    const lr = locaisReais.find(x => x.nome === localNome)
+    setSalvandoEndereco(true)
+    try {
+      if (lr) {
+        const atualizado = await locaisService.atualizar(lr.id, {
+          nome: formEndereco.nome || undefined,
+          numero_recinto: formEndereco.numero_recinto || null,
+          cep: formEndereco.cep || null,
+          endereco: formEndereco.endereco || null,
+          bairro: formEndereco.bairro || null,
+          cidade: formEndereco.cidade || null,
+          uf: formEndereco.uf || null,
+        })
+        setLocaisReais(prev => prev.map(l => l.id === lr.id ? atualizado : l))
+      } else {
+        const criado = await locaisService.criar({
+          nome: formEndereco.nome || localNome,
+          numero_recinto: formEndereco.numero_recinto || undefined,
+          cep: formEndereco.cep || undefined,
+          endereco: formEndereco.endereco || undefined,
+          bairro: formEndereco.bairro || undefined,
+          cidade: formEndereco.cidade || undefined,
+          uf: formEndereco.uf || undefined,
+          certame_id: certameId,
+          total_salas: 0,
+          capacidade_total: 0,
+          acessivel: false,
+        })
+        setLocaisReais(prev => [...prev, criado])
+      }
+      setEditandoEndereco(null)
+    } finally {
+      setSalvandoEndereco(false)
+    }
+  }
+
+  const abrirEditResponsaveis = (localNome: string) => {
+    const li = locaisInfo.find(x => x.local_nome === localNome)
+    setEditResponsaveis(li?.responsaveis ? li.responsaveis.map(r => ({ ...r })) : [])
+    setEditandoResponsaveis(localNome)
+    setEditandoEndereco(null)
+    setEditandoColabs(null)
+  }
+
+  const salvarResponsaveis = async (localNome: string) => {
+    setSalvandoResp(true)
+    const li = locaisInfo.find(x => x.local_nome === localNome)
+    try {
+      const updated = await candidatosService.salvarLocalInfo(certameId, localNome, editResponsaveis, li?.colaboradores_ids ?? [])
+      setLocaisInfo(prev => {
+        const idx = prev.findIndex(x => x.local_nome === localNome)
+        return idx >= 0 ? prev.map((x, i) => i === idx ? updated : x) : [...prev, updated]
+      })
+      setEditandoResponsaveis(null)
+    } finally {
+      setSalvandoResp(false)
+    }
+  }
+
+  const abrirEditColabs = (localNome: string) => {
+    const li = locaisInfo.find(x => x.local_nome === localNome)
+    setEditColabIds(li?.colaboradores_ids ? [...li.colaboradores_ids] : [])
+    setEditandoColabs(localNome)
+    setEditandoEndereco(null)
+    setEditandoResponsaveis(null)
+  }
+
+  const salvarColabs = async (localNome: string) => {
+    setSalvandoColabs(true)
+    const li = locaisInfo.find(x => x.local_nome === localNome)
+    try {
+      const updated = await candidatosService.salvarLocalInfo(certameId, localNome, li?.responsaveis ?? [], editColabIds)
+      setLocaisInfo(prev => {
+        const idx = prev.findIndex(x => x.local_nome === localNome)
+        return idx >= 0 ? prev.map((x, i) => i === idx ? updated : x) : [...prev, updated]
+      })
+      setEditandoColabs(null)
+    } finally {
+      setSalvandoColabs(false)
+    }
+  }
+
+  const abrirSala = async (local: string, sala: string, dia_prova: string | null, horario: string | null) => {
+    setSalaView({ local, sala, dia_prova, horario })
+    setEditandoEndereco(null)
+    setEditandoResponsaveis(null)
+    setEditandoColabs(null)
     setLoadingSala(true)
     setEditandoId(null)
     try {
-      setCandidatosSala(await candidatosService.listar(certameId, { local, sala }))
+      const params: { local: string; sala: string; dia?: string } = { local, sala }
+      if (dia_prova) params.dia = dia_prova
+      setCandidatosSala(await candidatosService.listar(certameId, params))
     } finally {
       setLoadingSala(false)
     }
@@ -959,8 +1358,16 @@ function TabLocaisAplicacao({ certameId }: { certameId: string }) {
         <button onClick={() => setSalaView(null)} className="text-sm text-gray-400 hover:text-gray-600 mb-4 flex items-center gap-1">
           ← {salaView.local}
         </button>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-gray-900">{salaView.sala}</h3>
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div>
+            <h3 className="font-semibold text-gray-900">{salaView.sala}</h3>
+            {(salaView.dia_prova || salaView.horario) && (
+              <p className="text-xs text-gray-400 mt-0.5">
+                {salaView.dia_prova ? new Date(salaView.dia_prova + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }) : ''}
+                {salaView.horario ? ` · ${salaView.horario}` : ''}
+              </p>
+            )}
+          </div>
           <span className="text-xs text-gray-400">{candidatosSala.length} candidato{candidatosSala.length !== 1 ? 's' : ''}</span>
         </div>
         {loadingSala ? (
@@ -1016,54 +1423,713 @@ function TabLocaisAplicacao({ certameId }: { certameId: string }) {
 
   return (
     <div className="space-y-2">
-      {locais.map(local => (
-        <div key={local.local_nome} className="border border-gray-200 rounded-xl overflow-hidden">
-          <button
-            className="w-full px-4 py-3 bg-gray-50 flex items-center justify-between hover:bg-gray-100 transition-colors text-left"
-            onClick={() => setLocalAberto(v => v === local.local_nome ? null : local.local_nome)}
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              {local.tem_condicao && <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" title="Contém condição especial" />}
-              <span className="text-sm font-medium text-gray-900 truncate">{local.local_nome}</span>
+      {locais.map(local => {
+        const li = locaisInfo.find(x => x.local_nome === local.local_nome)
+        const lr = locaisReais.find(x => x.nome === local.local_nome)
+        const isOpen = localAberto === local.local_nome
+        const colabsDoLocal = equipe.filter(m => li?.colaboradores_ids?.includes(m.colaborador_id))
+        return (
+          <div key={local.local_nome} className="border border-gray-200 rounded-xl overflow-hidden">
+            {/* Local header */}
+            <div
+              className="w-full px-4 py-3 bg-gray-50 flex items-center justify-between hover:bg-gray-100 transition-colors cursor-pointer"
+              onClick={() => {
+                setLocalAberto(isOpen ? null : local.local_nome)
+                setPeriodoAberto(null)
+                if (isOpen) { setEditandoEndereco(null); setEditandoResponsaveis(null); setEditandoColabs(null) }
+              }}
+            >
+              <div className="flex-1 min-w-0 mr-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  {local.tem_condicao && <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" title="Contém condição especial" />}
+                  <span className="text-sm font-medium text-gray-900 truncate">{local.local_nome}</span>
+                </div>
+                {/* summary line: address + colaboradores */}
+                <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0">
+                  {lr && (lr.endereco || lr.numero_recinto || lr.bairro || lr.cidade) && (
+                    <span className="text-xs text-gray-400">
+                      {[lr.endereco, lr.numero_recinto, lr.bairro, lr.cidade && (lr.uf ? `${lr.cidade}/${lr.uf}` : lr.cidade)].filter(Boolean).join(', ')}
+                    </span>
+                  )}
+                  {colabsDoLocal.slice(0, 2).map((m, i) => (
+                    <span key={i} className="text-xs text-indigo-600">{m.nome}{m.funcao ? ` — ${m.funcao}` : ''}</span>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs text-gray-400">
+                  {local.total_salas} sala{local.total_salas !== 1 ? 's' : ''} · {local.total_candidatos.toLocaleString('pt-BR')} candidatos
+                </span>
+                <svg className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
             </div>
-            <div className="flex items-center gap-3 shrink-0 ml-2">
-              <span className="text-xs text-gray-400">
-                {local.total_salas} sala{local.total_salas !== 1 ? 's' : ''} · {local.total_candidatos.toLocaleString('pt-BR')} candidatos
-              </span>
-              <svg className={`w-4 h-4 text-gray-400 transition-transform ${localAberto === local.local_nome ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          </button>
-          {localAberto === local.local_nome && (
-            <div className="divide-y divide-gray-100">
-              {local.salas.map(sala => (
-                <button
-                  key={sala.sala}
-                  className="w-full px-5 py-3 flex items-center justify-between hover:bg-indigo-50 transition-colors text-left"
-                  onClick={() => abrirSala(local.local_nome, sala.sala)}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    {sala.tem_condicao && <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />}
-                    <span className="text-sm text-gray-800">{sala.sala}</span>
-                    <div className="flex gap-1 flex-wrap">
-                      {sala.cargos.map(cargo => (
-                        <span key={cargo} className="text-xs bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-full">{cargo}</span>
+
+            {isOpen && (
+              <div>
+                {/* ── Seção Endereço ── */}
+                <div className="px-4 py-3 border-b border-gray-100 bg-white">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Endereço</p>
+                    {editandoEndereco !== local.local_nome && (
+                      <button
+                        onClick={e => { e.stopPropagation(); abrirEditEndereco(local.local_nome) }}
+                        className="text-xs text-indigo-500 hover:text-indigo-700"
+                      >
+                        {lr ? 'Editar' : 'Cadastrar'}
+                      </button>
+                    )}
+                  </div>
+
+                  {editandoEndereco === local.local_nome ? (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="col-span-2">
+                          <label className="block text-xs text-gray-500 mb-1">Nome do local</label>
+                          <input
+                            className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            value={formEndereco.nome}
+                            onChange={e => setFormEndereco(f => ({ ...f, nome: e.target.value }))}
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <label className="block text-xs text-gray-500 mb-1">Nº do Recinto</label>
+                          <input
+                            className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            value={formEndereco.numero_recinto}
+                            onChange={e => setFormEndereco(f => ({ ...f, numero_recinto: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">
+                            CEP {buscandoCepApl && <span className="text-indigo-400">(buscando...)</span>}
+                          </label>
+                          <input
+                            placeholder="00000-000"
+                            maxLength={9}
+                            className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            value={formEndereco.cep}
+                            onChange={e => handleCepAplChange(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">UF</label>
+                          <select
+                            className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            value={formEndereco.uf}
+                            onChange={e => setFormEndereco(f => ({ ...f, uf: e.target.value }))}
+                          >
+                            <option value="">UF</option>
+                            {UFS.map(uf => <option key={uf} value={uf}>{uf}</option>)}
+                          </select>
+                        </div>
+                        <div className="col-span-2">
+                          <label className="block text-xs text-gray-500 mb-1">Endereço</label>
+                          <input
+                            className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            value={formEndereco.endereco}
+                            onChange={e => setFormEndereco(f => ({ ...f, endereco: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Bairro</label>
+                          <input
+                            className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            value={formEndereco.bairro}
+                            onChange={e => setFormEndereco(f => ({ ...f, bairro: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Cidade</label>
+                          <input
+                            className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            value={formEndereco.cidade}
+                            onChange={e => setFormEndereco(f => ({ ...f, cidade: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          onClick={() => setEditandoEndereco(null)}
+                          className="flex-1 border border-gray-300 rounded-lg py-1.5 text-xs text-gray-600 hover:bg-gray-50"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          onClick={() => salvarEndereco(local.local_nome)}
+                          disabled={salvandoEndereco || !formEndereco.nome.trim()}
+                          className="flex-1 bg-indigo-600 text-white rounded-lg py-1.5 text-xs font-medium hover:bg-indigo-700 disabled:opacity-50"
+                        >
+                          {salvandoEndereco ? 'Salvando...' : 'Salvar endereço'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-600 space-y-0.5">
+                      {lr ? (
+                        <>
+                          {(lr.endereco || lr.numero_recinto || lr.bairro) && (
+                            <p>{[lr.endereco, lr.numero_recinto, lr.bairro].filter(Boolean).join(', ')}</p>
+                          )}
+                          {(lr.cidade || lr.uf || lr.cep) && (
+                            <p>{[lr.cidade, lr.uf].filter(Boolean).join('/')}{lr.cep ? ` — CEP ${lr.cep}` : ''}</p>
+                          )}
+                          {!lr.numero_recinto && !lr.endereco && !lr.cidade && (
+                            <p className="text-gray-300 italic">Endereço não cadastrado</p>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-gray-300 italic">Endereço não cadastrado</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Seção Responsáveis / Contatos ── */}
+                <div className="px-4 py-3 border-b border-gray-100 bg-white">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Responsáveis / Contatos</p>
+                    {editandoResponsaveis !== local.local_nome && (
+                      <button
+                        onClick={e => { e.stopPropagation(); abrirEditResponsaveis(local.local_nome) }}
+                        className="text-xs text-indigo-500 hover:text-indigo-700"
+                      >
+                        Editar
+                      </button>
+                    )}
+                  </div>
+
+                  {editandoResponsaveis === local.local_nome ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 mb-2">
+                        {equipe.length > 0 && (
+                          <select
+                            defaultValue=""
+                            onChange={e => {
+                              const membro = equipe.find(m => m.colaborador_id === e.target.value)
+                              if (!membro) return
+                              setEditResponsaveis(prev => [...prev, { nome: membro.nome, contato: membro.celular || '', obs: '' }])
+                              e.target.value = ''
+                            }}
+                            className="border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                          >
+                            <option value="">+ Da equipe...</option>
+                            {equipe.map(m => (
+                              <option key={m.colaborador_id} value={m.colaborador_id}>
+                                {m.nome}{m.funcao ? ` (${m.funcao})` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        <button
+                          onClick={() => setEditResponsaveis(prev => [...prev, { nome: '', contato: '', obs: '' }])}
+                          className="text-xs text-indigo-600 hover:text-indigo-800 border border-indigo-200 rounded-lg px-2 py-1 bg-white"
+                        >
+                          + Adicionar
+                        </button>
+                      </div>
+                      {editResponsaveis.length === 0 && (
+                        <p className="text-xs text-gray-300 text-center py-2">Nenhum responsável.</p>
+                      )}
+                      <div className="space-y-1.5">
+                        {editResponsaveis.map((r, idx) => (
+                          <div key={idx} className="flex gap-1.5 items-center">
+                            <input
+                              placeholder="Nome"
+                              value={r.nome}
+                              onChange={e => setEditResponsaveis(prev => prev.map((x, i) => i === idx ? { ...x, nome: e.target.value } : x))}
+                              className="w-28 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                            <input
+                              placeholder="Contato"
+                              value={r.contato}
+                              onChange={e => setEditResponsaveis(prev => prev.map((x, i) => i === idx ? { ...x, contato: e.target.value } : x))}
+                              className="w-36 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                            <input
+                              placeholder="Observação"
+                              value={r.obs || ''}
+                              onChange={e => setEditResponsaveis(prev => prev.map((x, i) => i === idx ? { ...x, obs: e.target.value } : x))}
+                              className="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                            <button
+                              onClick={() => setEditResponsaveis(prev => prev.filter((_, i) => i !== idx))}
+                              className="text-gray-300 hover:text-red-400 transition-colors shrink-0"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          onClick={() => setEditandoResponsaveis(null)}
+                          className="flex-1 border border-gray-300 rounded-lg py-1.5 text-xs text-gray-600 hover:bg-gray-50"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          onClick={() => salvarResponsaveis(local.local_nome)}
+                          disabled={salvandoResp}
+                          className="flex-1 bg-indigo-600 text-white rounded-lg py-1.5 text-xs font-medium hover:bg-indigo-700 disabled:opacity-50"
+                        >
+                          {salvandoResp ? 'Salvando...' : 'Salvar'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : li?.responsaveis?.length ? (
+                    <div className="space-y-0.5">
+                      {li.responsaveis.map((r, i) => (
+                        <p key={i} className="text-xs text-gray-700">{_textoResponsavel(r)}</p>
                       ))}
                     </div>
+                  ) : (
+                    <p className="text-xs text-gray-300 italic">Nenhum responsável cadastrado.</p>
+                  )}
+                </div>
+
+                {/* ── Seção Colaboradores ── */}
+                <div className="px-4 py-3 border-b border-gray-100 bg-white">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Colaboradores</p>
+                    {editandoColabs !== local.local_nome && (
+                      <button
+                        onClick={e => { e.stopPropagation(); abrirEditColabs(local.local_nome) }}
+                        className="text-xs text-indigo-500 hover:text-indigo-700"
+                      >
+                        Editar
+                      </button>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs text-gray-400">{sala.total} candidatos</span>
-                    <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
+
+                  {editandoColabs === local.local_nome ? (
+                    <div className="space-y-2">
+                      {equipe.length > 0 && (
+                        <select
+                          value=""
+                          onChange={e => {
+                            const id = e.target.value
+                            if (id && !editColabIds.includes(id)) setEditColabIds(prev => [...prev, id])
+                            e.target.value = ''
+                          }}
+                          className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                        >
+                          <option value="">+ Adicionar da equipe...</option>
+                          {equipe.filter(m => !editColabIds.includes(m.colaborador_id)).map(m => (
+                            <option key={m.colaborador_id} value={m.colaborador_id}>
+                              {m.nome}{m.funcao ? ` — ${m.funcao}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      {editColabIds.length === 0 && (
+                        <p className="text-xs text-gray-300 text-center py-2">Nenhum colaborador alocado.</p>
+                      )}
+                      <div className="space-y-1">
+                        {editColabIds.map(cid => {
+                          const m = equipe.find(e => e.colaborador_id === cid)
+                          return (
+                            <div key={cid} className="flex items-center justify-between bg-gray-50 rounded-lg px-2 py-1.5">
+                              <div>
+                                <span className="text-xs text-gray-800">{m?.nome || cid}</span>
+                                {m?.funcao && <span className="text-xs text-gray-400 ml-1">— {m.funcao}</span>}
+                              </div>
+                              <button
+                                onClick={() => setEditColabIds(prev => prev.filter(x => x !== cid))}
+                                className="text-gray-300 hover:text-red-400 transition-colors"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          onClick={() => setEditandoColabs(null)}
+                          className="flex-1 border border-gray-300 rounded-lg py-1.5 text-xs text-gray-600 hover:bg-gray-50"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          onClick={() => salvarColabs(local.local_nome)}
+                          disabled={salvandoColabs}
+                          className="flex-1 bg-indigo-600 text-white rounded-lg py-1.5 text-xs font-medium hover:bg-indigo-700 disabled:opacity-50"
+                        >
+                          {salvandoColabs ? 'Salvando...' : 'Salvar'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : colabsDoLocal.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {colabsDoLocal.map(m => (
+                        <span key={m.colaborador_id} className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">
+                          {m.nome}{m.funcao ? ` — ${m.funcao}` : ''}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-300 italic">Nenhum colaborador alocado.</p>
+                  )}
+                </div>
+
+                {/* ── Períodos ── */}
+                <div className="divide-y divide-gray-100">
+                  {local.periodos.map((periodo, pidx) => {
+                    const periodoKey = `${local.local_nome}|${periodo.dia_prova}|${periodo.horario}`
+                    const esteAberto = periodoAberto === periodoKey
+                    return (
+                      <div key={periodoKey}>
+                        <button
+                          className="w-full px-5 py-2.5 flex items-center justify-between hover:bg-gray-50 transition-colors text-left bg-white"
+                          onClick={() => setPeriodoAberto(esteAberto ? null : periodoKey)}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            {periodo.tem_condicao && <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />}
+                            <span className="text-sm font-medium text-gray-700">{_labelPeriodo(periodo, pidx)}</span>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0 ml-2">
+                            <span className="text-xs text-gray-400">
+                              {periodo.salas.length} sala{periodo.salas.length !== 1 ? 's' : ''} · {periodo.total.toLocaleString('pt-BR')} candidatos
+                            </span>
+                            <svg className={`w-4 h-4 text-gray-400 transition-transform ${esteAberto ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
+                        </button>
+
+                        {esteAberto && (
+                          <div className="bg-gray-50 divide-y divide-gray-100">
+                            {periodo.salas.map(sala => (
+                              <button
+                                key={sala.sala}
+                                className="w-full px-7 py-2.5 flex items-center justify-between hover:bg-indigo-50 transition-colors text-left"
+                                onClick={() => abrirSala(local.local_nome, sala.sala, periodo.dia_prova, periodo.horario)}
+                              >
+                                <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+                                  {sala.tem_condicao && <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />}
+                                  <span className="text-sm text-gray-800">{sala.sala}</span>
+                                  {sala.cargos.map(cargo => (
+                                    <span key={cargo} className="text-xs bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-full">{cargo}</span>
+                                  ))}
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0 ml-2">
+                                  <span className="text-xs text-gray-400">{sala.total} candidatos</span>
+                                  <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                  </svg>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Tab Equipes ───────────────────────────────────────────────────────────────
+
+const STATUS_EQUIPE_LABEL: Record<string, string> = {
+  pendente: 'Pendente',
+  ativo: 'Ativo',
+  inativo: 'Inativo',
+}
+const STATUS_EQUIPE_COLOR: Record<string, string> = {
+  pendente: 'bg-amber-100 text-amber-700',
+  ativo: 'bg-green-100 text-green-700',
+  inativo: 'bg-gray-100 text-gray-500',
+}
+
+function TabEquipes({ certameId }: { certameId: string }) {
+  const [equipe, setEquipe] = useState<MembroEquipe[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showModal, setShowModal] = useState(false)
+
+  const carregar = () => {
+    setLoading(true)
+    certameEquipeService.listar(certameId).then(setEquipe).finally(() => setLoading(false))
+  }
+
+  useEffect(() => { carregar() }, [certameId])
+
+  const desvincular = async (membro: MembroEquipe) => {
+    if (!window.confirm(`Remover ${membro.nome} da equipe?`)) return
+    await certameEquipeService.desvincular(membro.colaborador_id, certameId)
+    setEquipe(prev => prev.filter(m => m.id !== membro.id))
+  }
+
+  if (loading) return <p className="text-gray-400 text-sm">Carregando...</p>
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-medium text-gray-900">
+          Equipe{' '}
+          <span className="text-gray-400 font-normal text-sm">({equipe.length} membro{equipe.length !== 1 ? 's' : ''})</span>
+        </h3>
+        <button
+          onClick={() => setShowModal(true)}
+          className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"
+        >
+          + Adicionar membro
+        </button>
+      </div>
+
+      {equipe.length === 0 ? (
+        <div className="py-8 text-center">
+          <p className="text-gray-400 text-sm">Nenhum membro na equipe deste certame.</p>
+          <p className="text-gray-300 text-xs mt-1">Vincule colaboradores existentes ou cadastre novos.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {equipe.map(m => (
+            <div key={m.id} className="border border-gray-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-medium text-gray-900 text-sm">{m.nome}</span>
+                  {m.funcao && (
+                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{m.funcao}</span>
+                  )}
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_EQUIPE_COLOR[m.status] || 'bg-gray-100 text-gray-500'}`}>
+                    {STATUS_EQUIPE_LABEL[m.status] || m.status}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-400 mt-0.5 flex gap-3 flex-wrap">
+                  {m.celular && <span>{m.celular}</span>}
+                  {m.email && <span>{m.email}</span>}
+                  {m.cpf && <span>CPF {m.cpf}</span>}
+                </div>
+              </div>
+              <button
+                onClick={() => desvincular(m)}
+                className="text-gray-300 hover:text-red-400 transition-colors text-xs shrink-0"
+              >
+                Remover
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showModal && (
+        <AdicionarMembroModal
+          certameId={certameId}
+          jaVinculados={equipe.map(m => m.colaborador_id)}
+          onClose={() => setShowModal(false)}
+          onAdded={() => { carregar(); setShowModal(false) }}
+        />
+      )}
+    </div>
+  )
+}
+
+function AdicionarMembroModal({ certameId, jaVinculados, onClose, onAdded }: {
+  certameId: string
+  jaVinculados: string[]
+  onClose: () => void
+  onAdded: () => void
+}) {
+  const [aba, setAba] = useState<'vincular' | 'novo'>('vincular')
+  const [todos, setTodos] = useState<ColaboradorAdmin[]>([])
+  const [loadingTodos, setLoadingTodos] = useState(true)
+  const [search, setSearch] = useState('')
+  const [selecionado, setSelecionado] = useState<ColaboradorAdmin | null>(null)
+  const [funcaoVincular, setFuncaoVincular] = useState('')
+  const [vinculando, setVinculando] = useState(false)
+
+  const [formNovo, setFormNovo] = useState({ nome: '', cpf: '', celular: '' })
+  const [funcaoNovo, setFuncaoNovo] = useState('')
+  const [criando, setCriando] = useState(false)
+
+  useEffect(() => {
+    colaboradoresAdminService.listar()
+      .then(lista => setTodos(lista.filter(c => !jaVinculados.includes(c.id))))
+      .finally(() => setLoadingTodos(false))
+  }, [])
+
+  const filtrados = todos.filter(c =>
+    !search ||
+    c.nome.toLowerCase().includes(search.toLowerCase()) ||
+    (c.cpf && c.cpf.includes(search)) ||
+    (c.celular && c.celular.includes(search))
+  )
+
+  const vincular = async () => {
+    if (!selecionado) return
+    setVinculando(true)
+    try {
+      await certameEquipeService.vincular(selecionado.id, certameId, funcaoVincular || undefined)
+      onAdded()
+    } finally {
+      setVinculando(false)
+    }
+  }
+
+  const criarEVincular = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setCriando(true)
+    try {
+      const colab = await colaboradoresAdminService.preCadastrar(formNovo)
+      await certameEquipeService.vincular(colab.id, certameId, funcaoNovo || undefined)
+      onAdded()
+    } finally {
+      setCriando(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="px-6 pt-5 pb-0">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Adicionar membro à equipe</h3>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+          </div>
+          <div className="flex border-b border-gray-200 -mx-6 px-6">
+            {(['vincular', 'novo'] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setAba(tab)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  aba === tab ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {tab === 'vincular' ? 'Colaborador existente' : 'Novo colaborador'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="overflow-y-auto flex-1 px-6 py-4">
+          {aba === 'vincular' && (
+            <div className="space-y-3">
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Buscar por nome, CPF ou telefone..."
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              {loadingTodos && <p className="text-gray-400 text-sm">Carregando...</p>}
+              {!loadingTodos && filtrados.length === 0 && (
+                <p className="text-gray-400 text-sm py-4 text-center">Nenhum colaborador disponível.</p>
+              )}
+              {filtrados.map(c => (
+                <div
+                  key={c.id}
+                  onClick={() => setSelecionado(s => s?.id === c.id ? null : c)}
+                  className={`border rounded-xl px-4 py-3 cursor-pointer transition-colors ${
+                    selecionado?.id === c.id
+                      ? 'border-indigo-400 bg-indigo-50'
+                      : 'border-gray-200 hover:border-indigo-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-900 text-sm">{c.nome}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_EQUIPE_COLOR[c.status] || ''}`}>
+                      {STATUS_EQUIPE_LABEL[c.status] || c.status}
+                    </span>
                   </div>
-                </button>
+                  <div className="text-xs text-gray-400 mt-0.5 flex gap-2">
+                    {c.celular && <span>{c.celular}</span>}
+                    {c.cpf && <span>· {c.cpf}</span>}
+                  </div>
+                </div>
               ))}
+
+              {selecionado && (
+                <div className="border-t border-gray-200 pt-3 space-y-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Função neste certame (opcional)</label>
+                    <input
+                      value={funcaoVincular}
+                      onChange={e => setFuncaoVincular(e.target.value)}
+                      placeholder="ex: Coordenador de local, Fiscal..."
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={onClose} className="flex-1 border border-gray-300 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={vincular}
+                      disabled={vinculando}
+                      className="flex-1 bg-indigo-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      {vinculando ? 'Vinculando...' : `Vincular ${selecionado.nome}`}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
+
+          {aba === 'novo' && (
+            <form onSubmit={criarEVincular} className="space-y-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Nome *</label>
+                <input
+                  required
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  value={formNovo.nome}
+                  onChange={e => setFormNovo(f => ({ ...f, nome: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">CPF *</label>
+                <input
+                  required
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  value={formNovo.cpf}
+                  onChange={e => setFormNovo(f => ({ ...f, cpf: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Celular *</label>
+                <input
+                  required
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  value={formNovo.celular}
+                  onChange={e => setFormNovo(f => ({ ...f, celular: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Função neste certame (opcional)</label>
+                <input
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="ex: Coordenador de local, Fiscal..."
+                  value={funcaoNovo}
+                  onChange={e => setFuncaoNovo(e.target.value)}
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={onClose}
+                  className="flex-1 border border-gray-300 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={criando}
+                  className="flex-1 bg-indigo-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
+                  {criando ? 'Cadastrando...' : 'Cadastrar e vincular'}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
-      ))}
+      </div>
     </div>
   )
 }

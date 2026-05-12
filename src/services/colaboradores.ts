@@ -61,6 +61,18 @@ export interface CertamePortal {
   funcao?: string
 }
 
+export interface MembroEquipe {
+  id: string
+  certame_id: string
+  colaborador_id: string
+  funcao?: string | null
+  nome: string
+  cpf?: string | null
+  celular?: string | null
+  email?: string | null
+  status: 'pendente' | 'ativo' | 'inativo'
+}
+
 // ── Admin ────────────────────────────────────────────────────────────────────
 
 export const colaboradoresAdminService = {
@@ -90,6 +102,23 @@ export const colaboradoresAdminService = {
 
   desvincularCertame: async (id: string, certame_id: string): Promise<void> => {
     await api.delete(`/colaboradores/${id}/certames/${certame_id}`)
+  },
+}
+
+// ── Equipe por certame ────────────────────────────────────────────────────────
+
+export const certameEquipeService = {
+  listar: async (certameId: string): Promise<MembroEquipe[]> => {
+    const { data } = await api.get(`/certames/${certameId}/equipe`)
+    return data
+  },
+
+  vincular: async (colabId: string, certameId: string, funcao?: string): Promise<ColaboradorCertame> => {
+    return colaboradoresAdminService.vincularCertame(colabId, certameId, funcao)
+  },
+
+  desvincular: async (vinculoColabId: string, certameId: string): Promise<void> => {
+    return colaboradoresAdminService.desvincularCertame(vinculoColabId, certameId)
   },
 }
 

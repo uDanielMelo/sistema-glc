@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx --prefix /c/Users/Base1/sistema-glc tsc --noEmit -p /c/Users/Base1/sistema-glc/tsconfig.json)"
+      "Bash(npx --prefix /c/Users/Base1/sistema-glc tsc --noEmit -p /c/Users/Base1/sistema-glc/tsconfig.json)",
+      "Read(//c/Users/Base1/sistema-glc/**)",
+      "Bash(npx tsc *)",
+      "Bash(./venv/Scripts/alembic.exe upgrade *)",
+      "Bash(.\\\\venv\\\\Scripts\\\\alembic.exe upgrade *)"
     ]
   }
 }
