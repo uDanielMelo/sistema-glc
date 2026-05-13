@@ -1,0 +1,9 @@
+
+BACKEND
+cd C:\Users\Base1\sistema-glc\backend
+.\venv\Scripts\Activate.ps1
+uvicorn main:app --reload
+
+FRONTEND
+cd C:\Users\Base1\sistema-glc
+npm run dev

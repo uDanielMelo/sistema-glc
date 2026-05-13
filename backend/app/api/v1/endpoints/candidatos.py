@@ -318,6 +318,7 @@ class LocalInfoUpsert(BaseModel):
     local_nome: str
     responsaveis: list[ResponsavelSchema] = []
     colaboradores_ids: list[str] = []
+    grupo_fiscais_id: Optional[str] = None
 
 
 @router.patch("/{certame_id}/candidatos/{candidato_id}")
@@ -352,6 +353,7 @@ def listar_locais_info(
             "local_nome": li.local_nome,
             "responsaveis": li.responsaveis or [],
             "colaboradores_ids": li.colaboradores_ids or [],
+            "grupo_fiscais_id": li.grupo_fiscais_id,
         }
         for li in db.query(LocalAplicacaoInfo).filter(
             LocalAplicacaoInfo.certame_id == certame_id
@@ -376,17 +378,24 @@ def salvar_local_info(
     if li:
         li.responsaveis = responsaveis
         li.colaboradores_ids = colaboradores_ids
+        li.grupo_fiscais_id = data.grupo_fiscais_id
     else:
         li = LocalAplicacaoInfo(
             certame_id=certame_id,
             local_nome=data.local_nome,
             responsaveis=responsaveis,
             colaboradores_ids=colaboradores_ids,
+            grupo_fiscais_id=data.grupo_fiscais_id,
         )
         db.add(li)
     db.commit()
     db.refresh(li)
-    return {"local_nome": li.local_nome, "responsaveis": li.responsaveis or [], "colaboradores_ids": li.colaboradores_ids or []}
+    return {
+        "local_nome": li.local_nome,
+        "responsaveis": li.responsaveis or [],
+        "colaboradores_ids": li.colaboradores_ids or [],
+        "grupo_fiscais_id": li.grupo_fiscais_id,
+    }
 
 
 @router.delete("/{certame_id}/candidatos", status_code=204)

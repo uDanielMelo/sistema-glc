@@ -147,6 +147,7 @@ class Certame(Base):
     arquivos = relationship("CertameArquivo", back_populates="certame", cascade="all, delete-orphan")
     candidatos = relationship("CandidatoCertame", back_populates="certame", cascade="all, delete-orphan")
     locais_info = relationship("LocalAplicacaoInfo", back_populates="certame", cascade="all, delete-orphan")
+    grupos_fiscais = relationship("GrupoFiscais", back_populates="certame", cascade="all, delete-orphan")
 
 
 class CertameArquivo(Base):
@@ -191,8 +192,10 @@ class LocalAplicacaoInfo(Base):
     local_nome = Column(String, nullable=False)
     responsaveis = Column(JSON, default=list)
     colaboradores_ids = Column(JSON, default=list)
+    grupo_fiscais_id = Column(String, ForeignKey("grupos_fiscais.id", ondelete="SET NULL"), nullable=True)
 
     certame = relationship("Certame", back_populates="locais_info")
+    grupo_fiscais = relationship("GrupoFiscais")
 
 
 # ── Períodos e Cargos ─────────────────────────────────────────────────────────
@@ -354,6 +357,36 @@ class Fiscal(Base):
     telefone = Column(String)
     observacao = Column(Text)
     criado_em = Column(DateTime, default=now)
+
+
+class GrupoFiscais(Base):
+    __tablename__ = "grupos_fiscais"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    certame_id = Column(String, ForeignKey("certames.id"), nullable=False)
+    nome = Column(String, nullable=False)
+    criado_em = Column(DateTime, default=now)
+
+    certame = relationship("Certame", back_populates="grupos_fiscais")
+    fiscais = relationship("FiscalGrupo", back_populates="grupo", cascade="all, delete-orphan")
+
+
+class FiscalGrupo(Base):
+    __tablename__ = "fiscais_grupo"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    grupo_id = Column(String, ForeignKey("grupos_fiscais.id"), nullable=False)
+    nome = Column(String, nullable=False)
+    cpf = Column(String)
+    nascimento = Column(Date)
+    celular = Column(String)
+    funcao = Column(String)
+    periodo = Column(String)
+    observacao = Column(Text)
+    pagamento = Column(String)
+    criado_em = Column(DateTime, default=now)
+
+    grupo = relationship("GrupoFiscais", back_populates="fiscais")
 
 
 # ── Ocorrências ───────────────────────────────────────────────────────────────

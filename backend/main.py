@@ -9,6 +9,7 @@ from app.api.v1.endpoints.equipes import router as equipes_router
 from app.api.v1.endpoints.colaboradores import router as colaboradores_router
 from app.api.v1.endpoints.arquivos import router as arquivos_router
 from app.api.v1.endpoints.candidatos import router as candidatos_router
+from app.api.v1.endpoints.grupos_fiscais import router as grupos_fiscais_router
 
 app = FastAPI(
     title="GLC — Gestão e Logística de Certames",
@@ -39,3 +40,4 @@ app.include_router(equipes_router, prefix="/api/v1", tags=["equipes"])
 app.include_router(colaboradores_router, prefix="/api/v1")
 app.include_router(arquivos_router, prefix="/api/v1/certames", tags=["arquivos"])
 app.include_router(candidatos_router, prefix="/api/v1/certames", tags=["candidatos"])
+app.include_router(grupos_fiscais_router, prefix="/api/v1/certames", tags=["grupos-fiscais"])
