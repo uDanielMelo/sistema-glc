@@ -399,15 +399,33 @@ class Ocorrencia(Base):
     local_id = Column(String, ForeignKey("locais.id"), nullable=True)
     sala_id = Column(String, ForeignKey("salas.id"), nullable=True)
     candidato_id = Column(String, ForeignKey("candidatos.id"), nullable=True)
+    candidato_certame_id = Column(String, ForeignKey("candidatos_certame.id", ondelete="SET NULL"), nullable=True)
     registrado_por_id = Column(String, ForeignKey("usuarios.id"), nullable=False)
     tipo = Column(SAEnum(OcorrenciaTipo), nullable=False)
     descricao = Column(Text, nullable=False)
     criado_em = Column(DateTime, default=now)
+    atualizado_em = Column(DateTime, default=now, onupdate=now)
 
     local = relationship("Local", back_populates="ocorrencias")
     sala = relationship("Sala", back_populates="ocorrencias")
     candidato = relationship("Candidato", back_populates="ocorrencias")
+    candidato_certame = relationship("CandidatoCertame")
     registrado_por = relationship("Usuario", back_populates="ocorrencias")
+    anexos = relationship("OcorrenciaAnexo", back_populates="ocorrencia", cascade="all, delete-orphan")
+
+
+class OcorrenciaAnexo(Base):
+    __tablename__ = "ocorrencia_anexos"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    ocorrencia_id = Column(String, ForeignKey("ocorrencias.id", ondelete="CASCADE"), nullable=False)
+    nome_original = Column(String, nullable=False)
+    caminho = Column(String, nullable=False)
+    mime_type = Column(String)
+    tamanho = Column(Integer)
+    criado_em = Column(DateTime, default=now)
+
+    ocorrencia = relationship("Ocorrencia", back_populates="anexos")
 
 
 # ── Importações ───────────────────────────────────────────────────────────────
