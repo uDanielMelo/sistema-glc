@@ -21,7 +21,13 @@
       "Bash(python -c \"from app.api.v1.endpoints.ocorrencias import router; print\\('OK'\\)\")",
       "Bash(.venv/Scripts/python -c \"from app.api.v1.endpoints.ocorrencias import router; print\\('OK'\\)\")",
       "Bash(venv/Scripts/alembic upgrade *)",
-      "Bash(python3)"
+      "Bash(python3)",
+      "Bash(python3 -c ' *)",
+      "Bash(cmd /c \"cd c:\\\\Users\\\\Base1\\\\sistema-glc && npx tsc --noEmit 2>&1\")",
+      "Bash(cmd /c \"cd /d c:\\\\Users\\\\Base1\\\\sistema-glc && npx tsc --noEmit\")",
+      "Bash(cmd /c \"cd /d c:\\\\Users\\\\Base1\\\\sistema-glc && npx tsc --noEmit 2>&1 && echo TSC_OK\")",
+      "Bash(cmd /c \"c:\\\\Users\\\\Base1\\\\sistema-glc\\\\node_modules\\\\.bin\\\\tsc.cmd --noEmit --project c:\\\\Users\\\\Base1\\\\sistema-glc\\\\tsconfig.json 2>&1 && echo TSC_OK || echo TSC_FAIL\")",
+      "Bash(\"c:\\\\Users\\\\Base1\\\\sistema-glc\\\\node_modules\\\\.bin\\\\tsc.cmd\" --noEmit --project \"c:\\\\Users\\\\Base1\\\\sistema-glc\\\\tsconfig.json\")"
     ]
   }
 }

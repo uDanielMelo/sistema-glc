@@ -20,6 +20,7 @@ COLUNA_MAP = {
     'OBSERVAÇÃO': 'observacao',
     'OBSERVACAO': 'observacao',
     'OBS': 'observacao',
+    'PAGAMENTO': 'pagamento',
 }
 
 
