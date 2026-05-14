@@ -135,6 +135,7 @@ class Certame(Base):
     data_aplicacao = Column(DateTime)
     status = Column(SAEnum(CertameStatus), default=CertameStatus.rascunho)
     tipo_prova = Column(SAEnum(TipoProva), nullable=True)
+    divisao_id = Column(String, ForeignKey("certames.id", ondelete="SET NULL"), nullable=True)
     observacoes = Column(Text)
     criado_em = Column(DateTime, default=now)
     atualizado_em = Column(DateTime, default=now, onupdate=now)

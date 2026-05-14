@@ -28,7 +28,7 @@ def criar_certame(db: Session, data: CertameCreate, tenant_id: str) -> Certame:
 
 def atualizar_certame(db: Session, certame_id: str, data: CertameUpdate, tenant_id: str) -> Certame:
     certame = buscar_certame(db, certame_id, tenant_id)
-    for field, value in data.model_dump(exclude_none=True).items():
+    for field, value in data.model_dump(exclude_unset=True).items():
         setattr(certame, field, value)
     db.commit()
     db.refresh(certame)

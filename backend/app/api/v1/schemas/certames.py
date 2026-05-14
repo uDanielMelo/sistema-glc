@@ -7,6 +7,7 @@ from app.models.models import CertameStatus, TipoProva
 class CertameCreate(BaseModel):
     titulo: str
     numero_edital: Optional[str] = None
+    municipio: Optional[str] = None
     orgao: Optional[str] = None
     tipo: Optional[str] = None
     tipo_prova: Optional[TipoProva] = None
@@ -17,12 +18,14 @@ class CertameCreate(BaseModel):
 class CertameUpdate(BaseModel):
     titulo: Optional[str] = None
     numero_edital: Optional[str] = None
+    municipio: Optional[str] = None
     orgao: Optional[str] = None
     tipo: Optional[str] = None
     tipo_prova: Optional[TipoProva] = None
     data_aplicacao: Optional[datetime] = None
     observacoes: Optional[str] = None
     status: Optional[CertameStatus] = None
+    divisao_id: Optional[str] = None
 
 
 class CertameResponse(BaseModel):
@@ -30,12 +33,14 @@ class CertameResponse(BaseModel):
     tenant_id: str
     titulo: str
     numero_edital: Optional[str] = None
+    municipio: Optional[str] = None
     orgao: Optional[str] = None
     tipo: Optional[str] = None
     tipo_prova: Optional[TipoProva] = None
     data_aplicacao: Optional[datetime] = None
     status: CertameStatus
     observacoes: Optional[str] = None
+    divisao_id: Optional[str] = None
     criado_em: datetime
     atualizado_em: datetime
 

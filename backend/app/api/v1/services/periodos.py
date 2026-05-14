@@ -36,6 +36,7 @@ def deletar_periodo(db: Session, periodo_id: str) -> None:
     periodo = db.query(Periodo).filter(Periodo.id == periodo_id).first()
     if not periodo:
         raise HTTPException(status_code=404, detail="Período não encontrado")
+    db.query(Cargo).filter(Cargo.periodo_id == periodo_id).update({"periodo_id": None})
     db.delete(periodo)
     db.commit()
 
