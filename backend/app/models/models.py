@@ -129,6 +129,7 @@ class Certame(Base):
     tenant_id = Column(String, ForeignKey("tenants.id"), nullable=False)
     titulo = Column(String, nullable=False)
     numero_edital = Column(String)
+    municipio = Column(String)
     orgao = Column(String)
     tipo = Column(String)                   # concurso público, PSS, etc
     data_aplicacao = Column(DateTime)
@@ -148,6 +149,7 @@ class Certame(Base):
     candidatos = relationship("CandidatoCertame", back_populates="certame", cascade="all, delete-orphan")
     locais_info = relationship("LocalAplicacaoInfo", back_populates="certame", cascade="all, delete-orphan")
     grupos_fiscais = relationship("GrupoFiscais", back_populates="certame", cascade="all, delete-orphan")
+    agenda = relationship("CertameAgenda", back_populates="certame", cascade="all, delete-orphan", order_by="CertameAgenda.data, CertameAgenda.horario")
 
 
 class CertameArquivo(Base):
@@ -426,6 +428,24 @@ class OcorrenciaAnexo(Base):
     criado_em = Column(DateTime, default=now)
 
     ocorrencia = relationship("Ocorrencia", back_populates="anexos")
+
+
+# ── Agenda / Linha do Tempo ───────────────────────────────────────────────────
+
+class CertameAgenda(Base):
+    __tablename__ = "certame_agenda"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    certame_id = Column(String, ForeignKey("certames.id", ondelete="CASCADE"), nullable=False)
+    titulo = Column(String, nullable=False)
+    local = Column(String)
+    data = Column(Date)
+    horario = Column(String(10))
+    observacao = Column(Text)
+    criado_em = Column(DateTime, default=now)
+    atualizado_em = Column(DateTime, default=now, onupdate=now)
+
+    certame = relationship("Certame", back_populates="agenda")
 
 
 # ── Importações ───────────────────────────────────────────────────────────────
