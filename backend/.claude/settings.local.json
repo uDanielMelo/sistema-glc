@@ -27,7 +27,8 @@
       "Bash(cmd /c \"cd /d c:\\\\Users\\\\Base1\\\\sistema-glc && npx tsc --noEmit\")",
       "Bash(cmd /c \"cd /d c:\\\\Users\\\\Base1\\\\sistema-glc && npx tsc --noEmit 2>&1 && echo TSC_OK\")",
       "Bash(cmd /c \"c:\\\\Users\\\\Base1\\\\sistema-glc\\\\node_modules\\\\.bin\\\\tsc.cmd --noEmit --project c:\\\\Users\\\\Base1\\\\sistema-glc\\\\tsconfig.json 2>&1 && echo TSC_OK || echo TSC_FAIL\")",
-      "Bash(\"c:\\\\Users\\\\Base1\\\\sistema-glc\\\\node_modules\\\\.bin\\\\tsc.cmd\" --noEmit --project \"c:\\\\Users\\\\Base1\\\\sistema-glc\\\\tsconfig.json\")"
+      "Bash(\"c:\\\\Users\\\\Base1\\\\sistema-glc\\\\node_modules\\\\.bin\\\\tsc.cmd\" --noEmit --project \"c:\\\\Users\\\\Base1\\\\sistema-glc\\\\tsconfig.json\")",
+      "Bash(venv\\\\Scripts\\\\python.exe -m alembic upgrade head)"
     ]
   }
 }

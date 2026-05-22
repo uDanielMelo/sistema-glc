@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from app.db.session import get_db
 from app.core.deps import get_current_user, require_logistica
-from app.models.models import CandidatoCertame, Certame, LocalAplicacaoInfo, Usuario
+from app.models.models import CandidatoCertame, Certame, LocalAplicacaoInfo, Usuario, PeriodoHorarioLabel
 
 router = APIRouter()
 
@@ -407,3 +407,55 @@ def remover_todos(
     _get_certame(db, certame_id, current_user.tenant_id)
     db.query(CandidatoCertame).filter(CandidatoCertame.certame_id == certame_id).delete()
     db.commit()
+
+
+# ── Labels de período/horário ─────────────────────────────────────────────────
+
+class PeriodoLabelUpsert(BaseModel):
+    dia_prova: Optional[str] = None
+    horario: Optional[str] = None
+    label: str
+
+
+def _label_to_dict(l: PeriodoHorarioLabel) -> dict:
+    return {
+        "id": l.id,
+        "dia_prova": str(l.dia_prova) if l.dia_prova else None,
+        "horario": l.horario,
+        "label": l.label,
+    }
+
+
+@router.get("/{certame_id}/periodo-labels")
+def listar_periodo_labels(
+    certame_id: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    _get_certame(db, certame_id, current_user.tenant_id)
+    rows = db.query(PeriodoHorarioLabel).filter(PeriodoHorarioLabel.certame_id == certame_id).all()
+    return [_label_to_dict(r) for r in rows]
+
+
+@router.put("/{certame_id}/periodo-labels")
+def upsert_periodo_label(
+    certame_id: str,
+    data: PeriodoLabelUpsert,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_logistica),
+):
+    _get_certame(db, certame_id, current_user.tenant_id)
+    dia = date.fromisoformat(data.dia_prova) if data.dia_prova else None
+    row = db.query(PeriodoHorarioLabel).filter(
+        PeriodoHorarioLabel.certame_id == certame_id,
+        PeriodoHorarioLabel.dia_prova == dia,
+        PeriodoHorarioLabel.horario == data.horario,
+    ).first()
+    if row:
+        row.label = data.label
+    else:
+        row = PeriodoHorarioLabel(certame_id=certame_id, dia_prova=dia, horario=data.horario, label=data.label)
+        db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _label_to_dict(row)

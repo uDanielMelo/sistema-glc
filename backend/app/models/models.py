@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime
 from sqlalchemy import (
     Column, String, Integer, Boolean, DateTime, Text, Date,
-    ForeignKey, Enum as SAEnum, JSON
+    ForeignKey, Enum as SAEnum, JSON, UniqueConstraint
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -429,6 +429,24 @@ class OcorrenciaAnexo(Base):
     criado_em = Column(DateTime, default=now)
 
     ocorrencia = relationship("Ocorrencia", back_populates="anexos")
+
+
+# ── Labels de Período/Horário ────────────────────────────────────────────────
+
+class PeriodoHorarioLabel(Base):
+    __tablename__ = "periodo_horario_labels"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    certame_id = Column(String, ForeignKey("certames.id", ondelete="CASCADE"), nullable=False)
+    dia_prova = Column(Date, nullable=True)
+    horario = Column(String(10), nullable=True)
+    label = Column(String, nullable=False)
+
+    certame = relationship("Certame")
+
+    __table_args__ = (
+        UniqueConstraint("certame_id", "dia_prova", "horario", name="uq_periodo_horario_label"),
+    )
 
 
 # ── Agenda / Linha do Tempo ───────────────────────────────────────────────────
